@@ -2987,40 +2987,6 @@
             });
         }
 
-
-
-        // ============================================================
-        // 🎬 检查 Jable 视频存在
-        // ============================================================
-        async function checkJableVideo(url) {
-            console.log(`[Jable] Checking: ${url}`);
-            try {
-                const res = await gmFetch(url, { method: "HEAD" });
-                const hasVideo = res.status !== 404;
-                console.log(`[Jable] ${hasVideo ? "✅ Exists" : "❌ No video"}: ${url}`);
-                return hasVideo;
-            } catch (err) {
-                console.error(`[Jable] checkJableVideo failed:`, err);
-                return false;
-            }
-        }
-
-        // ============================================================
-        // 🎞️ 检查 123AV 视频存在 (HTTP 404)
-        // ============================================================
-        async function check123avVideo(url) {
-            console.log(`[123AV] Checking: ${url}`);
-            try {
-                const res = await gmFetch(url, { method: "HEAD" });
-                const hasVideo = res.status !== 404;
-                console.log(`[123AV] ${hasVideo ? "✅ Exists" : "❌ No video"}: ${url}`);
-                return hasVideo;
-            } catch (err) {
-                console.error(`[123AV] check123avVideo failed:`, err);
-                return false;
-            }
-        }
-
         // ============================================================
         // 🎬 检查视频是否存在
         // ============================================================
@@ -3028,8 +2994,8 @@
             console.log(`[${label}] Checking: ${url}`);
             try {
                 const res = await gmFetch(url, { method: "HEAD" });
-                const exists = res.status !== 404;
-                console.log(`[${label}] ${exists ? "✅ Exists" : "❌ No video"}: ${url}`);
+                const exists = res.status !== 404 || res.finalUrl !== url;
+                console.log(`[${label}] ${exists ? "✅ Exists" : "❌ No video"}: ${url} (${res.status})`);
                 return exists;
             } catch (err) {
                 console.error(`[${label}] checkVideoExists failed:`, err);
@@ -3543,10 +3509,10 @@
                filter: grayscale(100%);
             }
             .has-video{
-               filter: brightness(1.2);
+              color:#459df5
             }
             .no-video{
-                filter: grayscale(1); opacity: 0.6;
+                filter: grayscale(100%);
             }
 
             /* CSS for icon-button end */
