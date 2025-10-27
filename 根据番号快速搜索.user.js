@@ -2910,157 +2910,203 @@
         };
     }
 
-  // ============================================================
-  // 📦 模块：IconButtonUtils
-  // ============================================================
-  const IconButtonUtils = (() => {
+    // ============================================================
+    // 📦 模块：IconButtonUtils
+    // ============================================================
+    const IconButtonUtils = (() => {
 
-    /**
-     * 主方法：添加搜索列表的Icon按钮到番号旁
-     * @param {Array} list_all - 搜索列表配置数组, 来自 setting.list_all
-     * @param {string} avID - 番号ID
-     * @param {Element} targetElement - 目标元素，通常是番号所在的父DOM节点
-     */
-    function addIconButtons(list_all, avID, targetElement) {
-      // 检查是否有list_all配置
-      if (!list_all || !Array.isArray(list_all) || list_all.length === 0) {
-        return;
-      }
-
-      // 筛选出特殊标识为"IconButton"的配置项
-      let iconButtonConfigs = list_all.filter(config => {
-        return (
-          Array.isArray(config) &&
-          config.length >= 3 &&
-          config[2].trim().length > 0
-        );
-      });
-
-      if (iconButtonConfigs.length === 0) {
-        return;
-      }
-
-      // 如果没有传入参数，则不处理
-      if (!avID || !targetElement) {
-        return;
-      }
-
-      // 为指定的番号元素添加IconButton按钮
-      iconButtonConfigs.forEach(config => {
-        let [siteName, searchURL, icon] = config;
-
-        // 创建按钮元素
-        let buttonDiv = document.createElement("savdiv");
-        buttonDiv.classList.add("icon-button");
-        buttonDiv.innerHTML = icon;
-
-        // 生成搜索URL，替换%s占位符
-        let finalURL = searchURL.replace("%s", avID);
-        buttonDiv.dataset.url = finalURL;
-        buttonDiv.dataset.avid = avID;
-
-        // 添加点击事件
-        buttonDiv.addEventListener("click", function (e) {
-          GM_openInTab(e.target.dataset.url, { active: true, insert: true, setParent: true });
-          e.preventDefault();
-          return;
-        });
-
-        // 插入到番号后面
-        targetElement.appendChild(buttonDiv);
-
-        // 高亮有种子的图标
-        if (finalURL.includes("nyaa")) {
-          hasTorrent(finalURL).then(has => {
-            if (has) {
-              buttonDiv.classList.add("has-seeders");
-            } else {
-              buttonDiv.classList.add("no-seeders");
+        /**
+         * 主方法：添加搜索列表的Icon按钮到番号旁
+         * @param {Array} list_all - 搜索列表配置数组, 来自 setting.list_all
+         * @param {string} avID - 番号ID
+         * @param {Element} targetElement - 目标元素，通常是番号所在的父DOM节点
+         */
+        function addIconButtons(list_all, avID, targetElement) {
+            // 检查是否有list_all配置
+            if (!list_all || !Array.isArray(list_all) || list_all.length === 0) {
+                return;
             }
-          });
+
+            // 筛选出特殊标识为"IconButton"的配置项
+            let iconButtonConfigs = list_all.filter(config => {
+                return (
+                    Array.isArray(config) &&
+                    config.length >= 3 &&
+                    config[2].trim().length > 0
+                );
+            });
+
+            if (iconButtonConfigs.length === 0) {
+                return;
+            }
+
+            // 如果没有传入参数，则不处理
+            if (!avID || !targetElement) {
+                return;
+            }
+
+            // 为指定的番号元素添加IconButton按钮
+            iconButtonConfigs.forEach(config => {
+                const [siteName, searchURL, icon] = config;
+                // 生成搜索URL，替换%s占位符
+                const finalURL = searchURL.replace("%s", avID);
+                // 创建按钮元素
+                const buttonDiv = document.createElement("savdiv");
+                buttonDiv.classList.add("icon-button");
+                buttonDiv.innerHTML = icon;
+                buttonDiv.dataset.url = finalURL;
+                buttonDiv.dataset.avid = avID;
+
+                // 点击打开链接
+                buttonDiv.addEventListener("click", e => {
+                    GM_openInTab(finalURL, { active: true, insert: true, setParent: true });
+                    e.preventDefault();
+                });
+
+                // 插入到番号后面
+                targetElement.appendChild(buttonDiv);
+
+                // 高亮有种子的图标 🌱
+                if (finalURL.includes("nyaa")) {
+                    hasTorrent(finalURL).then(has => {
+                        buttonDiv.classList.add(has ? "has-seeders" : "no-seeders");
+                    });
+                }
+                // 高亮有Jable视频的图标 🎬
+                if (finalURL.includes("jable.tv")) {
+                    checkVideoExists(finalURL, "Jable").then(hasVideo => {
+                        buttonDiv.classList.add(hasVideo ? "has-video" : "no-video");
+                    });
+                }
+                // 高亮有123av视频的图标 🎞️
+                if (finalURL.includes("123av.com")) {
+                    checkVideoExists(finalURL, "123AV").then(hasVideo => {
+                        buttonDiv.classList.add(hasVideo ? "has-video" : "no-video");
+                    });
+                }
+            });
         }
-      });
-    }
 
-    /**
-     * 检测页面是否有符合条件的 torrent
-     * @param {string} url - 目标 nyaa.si 页面
-     * @param {number} [minSeeders=1]
-     * @param {number} [minSizeGiB=2]
-     * @returns {Promise<boolean>}
-     */
-    async function hasTorrent(url, minSeeders = 1, minSizeGiB = 2) {
-      console.log(`[Nyaa] Fetching: ${url}`);
-      try {
-        const html = await fetchHTML(url);
-        const doc = parseHTML(html);
-        const torrents = extractFilteredTorrents(doc, minSeeders, minSizeGiB);
 
-        if (torrents.length > 0) {
-          console.log(`[Nyaa] ✅ Found ${torrents.length} torrents:`);
-          torrents.forEach(t =>
-            console.log(`[Nyaa] - ${t.size} | ${t.seeders} seeders | ${t.torrent}`)
-          );
-          return true;
-        } else {
-          console.log(`[Nyaa] ❌ No matching torrents.`);
-          return false;
+
+        // ============================================================
+        // 🎬 检查 Jable 视频存在
+        // ============================================================
+        async function checkJableVideo(url) {
+            console.log(`[Jable] Checking: ${url}`);
+            try {
+                const res = await gmFetch(url, { method: "HEAD" });
+                const hasVideo = res.status !== 404;
+                console.log(`[Jable] ${hasVideo ? "✅ Exists" : "❌ No video"}: ${url}`);
+                return hasVideo;
+            } catch (err) {
+                console.error(`[Jable] checkJableVideo failed:`, err);
+                return false;
+            }
         }
-      } catch (err) {
-        console.error(`[Nyaa] hasTorrent failed:`, err);
-        return false;
-      }
-    }
 
-    // --- 内部函数 ---
-    async function fetchHTML(url) {
-      return new Promise((resolve, reject) => {
-        GM_xmlhttpRequest({
-          method: "GET",
-          url,
-          onload: res =>
-            res.status === 200
-              ? resolve(res.responseText)
-              : reject(`HTTP ${res.status}`),
-          onerror: reject,
-        });
-      });
-    }
+        // ============================================================
+        // 🎞️ 检查 123AV 视频存在 (HTTP 404)
+        // ============================================================
+        async function check123avVideo(url) {
+            console.log(`[123AV] Checking: ${url}`);
+            try {
+                const res = await gmFetch(url, { method: "HEAD" });
+                const hasVideo = res.status !== 404;
+                console.log(`[123AV] ${hasVideo ? "✅ Exists" : "❌ No video"}: ${url}`);
+                return hasVideo;
+            } catch (err) {
+                console.error(`[123AV] check123avVideo failed:`, err);
+                return false;
+            }
+        }
 
-    function parseHTML(html) {
-      return new DOMParser().parseFromString(html, "text/html");
-    }
+        // ============================================================
+        // 🎬 检查视频是否存在
+        // ============================================================
+        async function checkVideoExists(url, label = "Video") {
+            console.log(`[${label}] Checking: ${url}`);
+            try {
+                const res = await gmFetch(url, { method: "HEAD" });
+                const exists = res.status !== 404;
+                console.log(`[${label}] ${exists ? "✅ Exists" : "❌ No video"}: ${url}`);
+                return exists;
+            } catch (err) {
+                console.error(`[${label}] checkVideoExists failed:`, err);
+                return false;
+            }
+        }
 
-    function extractFilteredTorrents(doc, minSeeders, minSizeGiB) {
-      const rows = [...doc.querySelectorAll("table.torrent-list tbody tr")];
-      return rows
-        .map(row => {
-          const sizeText = row.querySelector("td:nth-child(4)")?.textContent.trim() ?? "";
-          const seedersText = row.querySelector("td:nth-child(6)")?.textContent.trim() ?? "";
-          const torrentLink = row.querySelector("td:nth-child(3) a[href$='.torrent']")?.href;
-          if (!torrentLink) return null;
+        // ============================================================
+        // 💽 检查 nyaa 种子
+        // ============================================================
+        async function hasTorrent(url, minSeeders = 1, minSizeGiB = 2) {
+            console.log(`[Nyaa] Fetching: ${url}`);
+            try {
+                const res = await gmFetch(url);
+                if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+                const doc = new DOMParser().parseFromString(res.responseText, "text/html");
+                const torrents = extractFilteredTorrents(doc, minSeeders, minSizeGiB);
+                const has = torrents.length > 0;
+                console.log(`[Nyaa] ${has ? "✅ Found torrents" : "❌ No torrents"}: ${url}`);
+                return has;
+            } catch (err) {
+                console.error(`[Nyaa] hasTorrent failed:`, err);
+                return false;
+            }
+        }
 
-          const seeders = parseInt(seedersText, 10) || 0;
-          const sizeGiB = parseSizeToGiB(sizeText);
-          return seeders > minSeeders && sizeGiB > minSizeGiB
-            ? { torrent: torrentLink, seeders, size: sizeText }
-            : null;
-        })
-        .filter(Boolean);
-    }
+        // ============================================================
+        // 🌐 通用 GM_xmlhttpRequest 封装
+        // ============================================================
+        async function gmFetch(url, options = {}) {
+            const method = options.method || "GET";
+            return new Promise((resolve, reject) => {
+                GM_xmlhttpRequest({
+                    method,
+                    url,
+                    onload: res => {
+                        resolve({
+                            status: res.status,
+                            responseText: res.responseText,
+                            finalUrl: res.finalUrl || res.responseURL,
+                        });
+                    },
+                    onerror: err => reject(err),
+                });
+            });
+        }
 
-    function parseSizeToGiB(sizeText) {
-      const match = sizeText.match(/([\d.]+)\s*(GiB|MiB|KiB|B)/i);
-      if (!match) return 0;
-      const size = parseFloat(match[1]);
-      const unit = match[2].toLowerCase();
-      const factor = { gib: 1, mib: 1 / 1024, kib: 1 / (1024 ** 2), b: 1 / (1024 ** 3) };
-      return size * (factor[unit] || 0);
-    }
+        function extractFilteredTorrents(doc, minSeeders, minSizeGiB) {
+            const rows = [...doc.querySelectorAll("table.torrent-list tbody tr")];
+            return rows
+                .map(row => {
+                    const sizeText = row.querySelector("td:nth-child(4)")?.textContent.trim() ?? "";
+                    const seedersText = row.querySelector("td:nth-child(6)")?.textContent.trim() ?? "";
+                    const torrentLink = row.querySelector("td:nth-child(3) a[href$='.torrent']")?.href;
+                    if (!torrentLink) return null;
 
-    // --- 导出模块 ---
-    return { addIconButtons };
-  })();
+                    const seeders = parseInt(seedersText, 10) || 0;
+                    const sizeGiB = parseSizeToGiB(sizeText);
+                    return seeders > minSeeders && sizeGiB > minSizeGiB
+                        ? { torrent: torrentLink, seeders, size: sizeText }
+                        : null;
+                })
+                .filter(Boolean);
+        }
+
+        function parseSizeToGiB(sizeText) {
+            const match = sizeText.match(/([\d.]+)\s*(GiB|MiB|KiB|B)/i);
+            if (!match) return 0;
+            const size = parseFloat(match[1]);
+            const unit = match[2].toLowerCase();
+            const factor = { gib: 1, mib: 1 / 1024, kib: 1 / (1024 ** 2), b: 1 / (1024 ** 3) };
+            return size * (factor[unit] || 0);
+        }
+
+        // --- 导出模块 ---
+        return { addIconButtons };
+    })();
 
     // 调用qbit下载
     function qBit(torrent){
@@ -3496,6 +3542,13 @@
             .no-seeders{
                filter: grayscale(100%);
             }
+            .has-video{
+               filter: brightness(1.2);
+            }
+            .no-video{
+                filter: grayscale(1); opacity: 0.6;
+            }
+
             /* CSS for icon-button end */
 
             avspan svg {
