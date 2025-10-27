@@ -742,6 +742,13 @@
             var divWrap = document.createElement("savdiv");
             divWrap.innerHTML = otext;
             divWrap.appendChild(odiv);
+
+            // 添加Icon Button按钮
+            const avID = odiv.dataset.av;
+            if (avID) {
+                IconButtonUtils.addIconButtons(setting.list_all, avID, divWrap);
+            }
+
             return divWrap;
         }else{
             odiv.innerHTML = otext;
@@ -2903,6 +2910,158 @@
         };
     }
 
+  // ============================================================
+  // 📦 模块：IconButtonUtils
+  // ============================================================
+  const IconButtonUtils = (() => {
+
+    /**
+     * 主方法：添加搜索列表的Icon按钮到番号旁
+     * @param {Array} list_all - 搜索列表配置数组, 来自 setting.list_all
+     * @param {string} avID - 番号ID
+     * @param {Element} targetElement - 目标元素，通常是番号所在的父DOM节点
+     */
+    function addIconButtons(list_all, avID, targetElement) {
+      // 检查是否有list_all配置
+      if (!list_all || !Array.isArray(list_all) || list_all.length === 0) {
+        return;
+      }
+
+      // 筛选出特殊标识为"IconButton"的配置项
+      let iconButtonConfigs = list_all.filter(config => {
+        return (
+          Array.isArray(config) &&
+          config.length >= 3 &&
+          config[2].trim().length > 0
+        );
+      });
+
+      if (iconButtonConfigs.length === 0) {
+        return;
+      }
+
+      // 如果没有传入参数，则不处理
+      if (!avID || !targetElement) {
+        return;
+      }
+
+      // 为指定的番号元素添加IconButton按钮
+      iconButtonConfigs.forEach(config => {
+        let [siteName, searchURL, icon] = config;
+
+        // 创建按钮元素
+        let buttonDiv = document.createElement("savdiv");
+        buttonDiv.classList.add("icon-button");
+        buttonDiv.innerHTML = icon;
+
+        // 生成搜索URL，替换%s占位符
+        let finalURL = searchURL.replace("%s", avID);
+        buttonDiv.dataset.url = finalURL;
+        buttonDiv.dataset.avid = avID;
+
+        // 添加点击事件
+        buttonDiv.addEventListener("click", function (e) {
+          GM_openInTab(e.target.dataset.url, { active: true, insert: true, setParent: true });
+          e.preventDefault();
+          return;
+        });
+
+        // 插入到番号后面
+        targetElement.appendChild(buttonDiv);
+
+        // 高亮有种子的图标
+        if (finalURL.includes("nyaa")) {
+          hasTorrent(finalURL).then(has => {
+            if (has) {
+              buttonDiv.classList.add("has-seeders");
+            } else {
+              buttonDiv.classList.add("no-seeders");
+            }
+          });
+        }
+      });
+    }
+
+    /**
+     * 检测页面是否有符合条件的 torrent
+     * @param {string} url - 目标 nyaa.si 页面
+     * @param {number} [minSeeders=1]
+     * @param {number} [minSizeGiB=2]
+     * @returns {Promise<boolean>}
+     */
+    async function hasTorrent(url, minSeeders = 1, minSizeGiB = 2) {
+      console.log(`[Nyaa] Fetching: ${url}`);
+      try {
+        const html = await fetchHTML(url);
+        const doc = parseHTML(html);
+        const torrents = extractFilteredTorrents(doc, minSeeders, minSizeGiB);
+
+        if (torrents.length > 0) {
+          console.log(`[Nyaa] ✅ Found ${torrents.length} torrents:`);
+          torrents.forEach(t =>
+            console.log(`[Nyaa] - ${t.size} | ${t.seeders} seeders | ${t.torrent}`)
+          );
+          return true;
+        } else {
+          console.log(`[Nyaa] ❌ No matching torrents.`);
+          return false;
+        }
+      } catch (err) {
+        console.error(`[Nyaa] hasTorrent failed:`, err);
+        return false;
+      }
+    }
+
+    // --- 内部函数 ---
+    async function fetchHTML(url) {
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: "GET",
+          url,
+          onload: res =>
+            res.status === 200
+              ? resolve(res.responseText)
+              : reject(`HTTP ${res.status}`),
+          onerror: reject,
+        });
+      });
+    }
+
+    function parseHTML(html) {
+      return new DOMParser().parseFromString(html, "text/html");
+    }
+
+    function extractFilteredTorrents(doc, minSeeders, minSizeGiB) {
+      const rows = [...doc.querySelectorAll("table.torrent-list tbody tr")];
+      return rows
+        .map(row => {
+          const sizeText = row.querySelector("td:nth-child(4)")?.textContent.trim() ?? "";
+          const seedersText = row.querySelector("td:nth-child(6)")?.textContent.trim() ?? "";
+          const torrentLink = row.querySelector("td:nth-child(3) a[href$='.torrent']")?.href;
+          if (!torrentLink) return null;
+
+          const seeders = parseInt(seedersText, 10) || 0;
+          const sizeGiB = parseSizeToGiB(sizeText);
+          return seeders > minSeeders && sizeGiB > minSizeGiB
+            ? { torrent: torrentLink, seeders, size: sizeText }
+            : null;
+        })
+        .filter(Boolean);
+    }
+
+    function parseSizeToGiB(sizeText) {
+      const match = sizeText.match(/([\d.]+)\s*(GiB|MiB|KiB|B)/i);
+      if (!match) return 0;
+      const size = parseFloat(match[1]);
+      const unit = match[2].toLowerCase();
+      const factor = { gib: 1, mib: 1 / 1024, kib: 1 / (1024 ** 2), b: 1 / (1024 ** 3) };
+      return size * (factor[unit] || 0);
+    }
+
+    // --- 导出模块 ---
+    return { addIconButtons };
+  })();
+
     // 调用qbit下载
     function qBit(torrent){
         if(debug){console.log("正在调用磁力下载, ",torrent);};
@@ -3317,6 +3476,28 @@
                 text-decoration:line-through;
                 color:#333;
             }
+
+            /* CSS for icon-button start */
+            .icon-button{
+                cursor: pointer;
+                display: inline-block;
+                margin-left: 4px;
+                color: white;
+                font-size: 16px;
+            }
+            .icon-button:hover{
+                background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+                transform: translateY(-1px);
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            }
+            .has-seeders{
+               color:#459df5
+            }
+            .no-seeders{
+               filter: grayscale(100%);
+            }
+            /* CSS for icon-button end */
+
             avspan svg {
                 height: 14px;
                 position: relative;
