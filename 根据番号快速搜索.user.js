@@ -654,6 +654,20 @@
 
                 var odiv = addEventAndStyle(localInfo[avID],avID)   // 添加事件和样式
 
+                // fc2 番号是否合法: FC2-012345 和 FC2PPV-012345 搜索结果不一样 
+                if(avID.match(/fc2/i) && localInfo[avID] && localInfo[avID].noInfo ){
+                    let avID2;
+                    if(avID.match(/ppv/i)){
+                        avID2 = avID.replace("FC2-PPV-","FC2-");
+                    }else{
+                        avID2 = avID.replace("FC2-","FC2-PPV-");
+                    }
+                    if(localInfo[avID2] && !localInfo[avID2].noInfo){
+                        avID = avID2;
+                        odiv = addEventAndStyle(localInfo[avID],avID)
+                    }
+                }
+
                 if(debug) {searchTimes++;avIDTimes++; console.log(avIDTimes + "无码番号: " + avID, otext); otext = "[!"+avIDTimes +"]" + otext;}
 
                 odiv.dataset.av_wuma = avID;
@@ -682,9 +696,9 @@
                 if(avID.match(/fc2/i) && localInfo[avID] && localInfo[avID].noInfo ){
                     let avID2;
                     if(avID.match(/ppv/i)){
-                        avID2 = avID.replace("FC2PPV","FC2");
+                        avID2 = avID.replace("FC2-PPV-","FC2-");
                     }else{
-                        avID2 = avID.replace("FC2","FC2PPV");
+                        avID2 = avID.replace("FC2-","FC2-PPV-");
                     }
                     if(localInfo[avID2] && !localInfo[avID2].noInfo){
                         avID = avID2;
@@ -2094,14 +2108,14 @@
     // 格式化无码番号
     function formatWuma(otext){
         otext = otext.replace(/\s+|carib[-_]|1pondo[-_]|-1pon|-paco|-carib|hd_/ig,"");
-        // 不再分 "FC2PPV-" 和 "FC2-" 统一为 "FC2-"
+        // 不再分 "FC2PPV-" 和 "FC2-" 统一为 "FC2-" -> 修复: 应该保留 PPV 以提高匹配率
         if(otext.match(/fc2/i)){
             var oindex = otext.search(/(?<!fc)\d/i);
-            // if(otext.match(/ppv/i)){
-            //     otext = "FC2PPV-" + otext.slice(oindex)
-            // }else{
+            if(otext.match(/ppv/i)){
+                otext = "FC2-PPV-" + otext.slice(oindex)
+            }else{
                 otext = "FC2-" + otext.slice(oindex)
-            // }
+            }
             return otext.toUpperCase();
         }
         // heyzo
@@ -3015,9 +3029,7 @@
          */
         function addIconButtons(list_all, avID, targetElement) {
             // 检查是否有list_all配置
-            if (!list_all || !Array.isArray(list_all) || list_all.length === 0) {
-                return;
-            }
+            if (!list_all?.length || !avID || !targetElement) return;
 
             // 筛选出特殊标识为"IconButton"的配置项
             let iconButtonConfigs = list_all.filter(config => {
@@ -3027,15 +3039,6 @@
                     config[2].trim().length > 0
                 );
             });
-
-            if (iconButtonConfigs.length === 0) {
-                return;
-            }
-
-            // 如果没有传入参数，则不处理
-            if (!avID || !targetElement) {
-                return;
-            }
 
             // 为指定的番号元素添加IconButton按钮
             iconButtonConfigs.forEach(config => {
