@@ -2929,6 +2929,31 @@
     // ============================================================
     const IconButtonUtils = (() => {
 
+        const CACHE_KEY = "_external_link_cache";
+        const CACHE_TTL = 24 * 60 * 60 * 1000; // 24小时
+
+        function getCache(url) {
+            const cache = GM_getValue(CACHE_KEY, {});
+            const item = cache[url];
+            if (item && (Date.now() - item.time < CACHE_TTL)) {
+                return item.val;
+            }
+            return null;
+        }
+
+        function setCache(url, val) {
+            let cache = GM_getValue(CACHE_KEY, {});
+            const now = Date.now();
+            const entries = Object.entries(cache);
+            if (entries.length > 300) {
+                // 保留最近的200条
+                const sorted = entries.sort((a, b) => b[1].time - a[1].time);
+                cache = Object.fromEntries(sorted.slice(0, 200));
+            }
+            cache[url] = { val, time: now };
+            GM_setValue(CACHE_KEY, cache);
+        }
+
         /**
          * 主方法：添加搜索列表的Icon按钮到番号旁
          * @param {Array} list_all - 搜索列表配置数组, 来自 setting.list_all
@@ -2969,23 +2994,36 @@
                 // 插入到番号后面
                 targetElement.appendChild(buttonDiv);
 
-                // 高亮有种子的图标 🌱
-                if (finalURL.includes("nyaa")) {
-                    hasTorrent(finalURL).then(has => {
-                        buttonDiv.classList.add(has ? "has-seeders" : "no-seeders");
-                    });
-                }
-                // 高亮有Jable视频的图标 🎬
-                if (finalURL.includes("jable.tv")) {
-                    checkVideoExists(finalURL, "Jable").then(hasVideo => {
-                        buttonDiv.classList.add(hasVideo ? "has-video" : "no-video");
-                    });
-                }
-                // 高亮有123av视频的图标 🎞️
-                if (finalURL.includes("123av.com")) {
-                    checkVideoExists(finalURL, "123AV").then(hasVideo => {
-                        buttonDiv.classList.add(hasVideo ? "has-video" : "no-video");
-                    });
+                const isNyaa = finalURL.includes("nyaa");
+                const isJable = finalURL.includes("jable.tv");
+                const is123av = finalURL.includes("123av.com");
+
+                if (isNyaa || isJable || is123av) {
+                    const cached = getCache(finalURL);
+                    if (cached !== null) {
+                        // 高亮结果
+                        if (isNyaa) buttonDiv.classList.add(cached ? "has-seeders" : "no-seeders");
+                        else buttonDiv.classList.add(cached ? "has-video" : "no-video");
+                    } else {
+                        // 显示加载状态
+                        buttonDiv.classList.add("loading-status");
+                        if (isNyaa) {
+                            // 高亮有种子的图标 🌱
+                            hasTorrent(finalURL).then(has => {
+                                buttonDiv.classList.remove("loading-status");
+                                buttonDiv.classList.add(has ? "has-seeders" : "no-seeders");
+                                setCache(finalURL, has);
+                            });
+                        } else {
+                            const label = isJable ? "Jable" : "123AV";
+                            // 高亮有视频的图标
+                            checkVideoExists(finalURL, label).then(hasVideo => {
+                                buttonDiv.classList.remove("loading-status");
+                                buttonDiv.classList.add(hasVideo ? "has-video" : "no-video");
+                                setCache(finalURL, hasVideo);
+                            });
+                        }
+                    }
                 }
             });
         }
@@ -3073,7 +3111,6 @@
             return size * (factor[unit] || 0);
         }
 
-        // --- 导出模块 ---
         return { addIconButtons };
     })();
 
@@ -3261,6 +3298,7 @@
     function clearSetting(){
         GM_deleteValue("_setting");
         GM_deleteValue("_setting2");
+        GM_deleteValue("_external_link_cache");
         localInfo = {};
         savBoxClose();
         location.reload();
@@ -3499,11 +3537,21 @@
                 margin-left: 4px;
                 color: white;
                 font-size: 16px;
+                transition: 0.3s;
             }
             .icon-button:hover{
                 background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
                 transform: translateY(-1px);
                 box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            }
+            .icon-button.loading-status {
+                animation: sav-loading-pulse 1.5s infinite;
+                pointer-events: none;
+            }
+            @keyframes sav-loading-pulse {
+                0% { opacity: 0.4; }
+                50% { opacity: 1; }
+                100% { opacity: 0.4; }
             }
             .has-seeders{
                color:#459df5
