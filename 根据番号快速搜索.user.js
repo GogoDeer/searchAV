@@ -3033,6 +3033,7 @@
 
         const CACHE_KEY = "_external_link_cache";
         const CACHE_TTL = 24 * 60 * 60 * 1000; // 24小时
+        const inflightChecks = new Map(); // 内存级去重：URL -> Promise<boolean>
 
         function getCache(url) {
             const cache = GM_getValue(CACHE_KEY, {});
@@ -3109,25 +3110,43 @@
                     } else {
                         // 显示加载状态
                         buttonDiv.classList.add("loading-status");
-                        if (isNyaa) {
-                            // 高亮有种子的图标 🌱
-                            hasTorrent(finalURL).then(has => {
-                                buttonDiv.classList.remove("loading-status");
-                                buttonDiv.classList.add(has ? "has-seeders" : "no-seeders");
-                                setCache(finalURL, has);
-                            });
-                        } else {
-                            const label = isJable ? "Jable" : "123AV";
-                            // 高亮有视频的图标
-                            checkVideoExists(finalURL, label).then(hasVideo => {
-                                buttonDiv.classList.remove("loading-status");
-                                buttonDiv.classList.add(hasVideo ? "has-video" : "no-video");
-                                setCache(finalURL, hasVideo);
-                            });
-                        }
+                        // 使用 fetchStatus 去重：同一 URL 只发一次请求
+                        fetchStatus(finalURL, isNyaa, isJable).then(result => {
+                            buttonDiv.classList.remove("loading-status");
+                            if (isNyaa) buttonDiv.classList.add(result ? "has-seeders" : "no-seeders");
+                            else buttonDiv.classList.add(result ? "has-video" : "no-video");
+                        });
                     }
                 }
             });
+        }
+
+        // ============================================================
+        // 🔄 统一检查入口（内存去重 + 持久化缓存）
+        // 同一 URL 在同一页面生命周期内只发一次网络请求
+        // ============================================================
+        function fetchStatus(url, isNyaa, isJable) {
+            // 如果已经有同 URL 的请求在飞行中，直接复用
+            if (inflightChecks.has(url)) {
+                console.log(`[IconButton] Reusing inflight check: ${url}`);
+                return inflightChecks.get(url);
+            }
+
+            const label = isNyaa ? "Nyaa" : (isJable ? "Jable" : "123AV");
+            const promise = (isNyaa ? hasTorrent(url) : checkVideoExists(url, label))
+                .then(result => {
+                    setCache(url, result);
+                    inflightChecks.delete(url);
+                    return result;
+                })
+                .catch(err => {
+                    console.error(`[IconButton] fetchStatus failed for ${url}:`, err);
+                    inflightChecks.delete(url);
+                    return false;
+                });
+
+            inflightChecks.set(url, promise);
+            return promise;
         }
 
         // ============================================================
