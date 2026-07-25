@@ -813,6 +813,16 @@
         }
     }
 
+    /**
+     * 格式化搜索URL
+     * 如果是 123av.com 的链接，将生成的 URL 整体转为小写
+     */
+    function formatSearchURL(searchURL, avID) {
+        if (!searchURL) return "";
+        const url = searchURL.replace("%s", avID || "");
+        return url.includes("123av") ? url.toLowerCase() : url;
+    }
+
     // 创建搜索基本菜单(搜索按钮)
     function createPattenr(id,id_wuma){
         let aPattern = `<avdivbutton>`
@@ -836,7 +846,7 @@
         }
         if(savList){
             for(let i=0; i<savList.length;i++){
-                aPattern += "<avdiv class='savlink'>" + "<a href='" + savList[i][1].replace("%s", id) +" 'target='_blank' referrerpolicy='same-origin'>" + savList[i][0] + "</a>" + "</avdiv>"
+                aPattern += "<avdiv class='savlink'>" + "<a href='" + formatSearchURL(savList[i][1], id) +" 'target='_blank' referrerpolicy='same-origin'>" + savList[i][0] + "</a>" + "</avdiv>"
             }
         }
 
@@ -844,7 +854,7 @@
         if(setting.list_all && setting.list_all.length>0){
             var savListAll = setting.list_all;
             for(let i=0; i<savListAll.length;i++){
-                aPattern += "<avdiv class='savlink'>" + "<a href='" + savListAll[i][1].replace("%s", id) +" 'target='_blank' referrerpolicy='same-origin'>" + savListAll[i][0] + "</a>" + "</avdiv>"
+                aPattern += "<avdiv class='savlink'>" + "<a href='" + formatSearchURL(savListAll[i][1], id) +" 'target='_blank' referrerpolicy='same-origin'>" + savListAll[i][0] + "</a>" + "</avdiv>"
             }
         }
 
@@ -875,7 +885,7 @@
                 ]
             ];
             for(let i=0; i<debugSearchList.length;i++){
-                aPattern += "<avdiv class='savlink'>" + "<a href='" + debugSearchList[i][1].replace("%s", id) +" 'target='_blank' referrerpolicy='same-origin'>" + debugSearchList[i][0] + "</a>" + "</avdiv>"
+                aPattern += "<avdiv class='savlink'>" + "<a href='" + formatSearchURL(debugSearchList[i][1], id) +" 'target='_blank' referrerpolicy='same-origin'>" + debugSearchList[i][0] + "</a>" + "</avdiv>"
             }
         }
         if(debug || setting.addOtherButton){aPattern += "<avdiv class='savlink savSetting'>设置</avdiv><avdiv class='savlink savCopyID' data-av='"+ id +"'>" + id + "</avdiv>"};
@@ -3069,7 +3079,7 @@
             iconButtonConfigs.forEach(config => {
                 const [siteName, searchURL, icon] = config;
                 // 生成搜索URL，替换%s占位符
-                const finalURL = searchURL.replace("%s", avID);
+                const finalURL = formatSearchURL(searchURL, avID);
                 // 创建按钮元素
                 const buttonDiv = document.createElement("savdiv");
                 buttonDiv.classList.add("icon-button");
