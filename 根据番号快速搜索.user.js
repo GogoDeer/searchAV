@@ -3649,7 +3649,6 @@
             }
             .icon-button.loading-status {
                 animation: sav-loading-pulse 1.5s infinite;
-                pointer-events: none;
             }
             @keyframes sav-loading-pulse {
                 0% { opacity: 0.4; }
