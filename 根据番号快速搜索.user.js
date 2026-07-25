@@ -3137,8 +3137,12 @@
             console.log(`[${label}] Checking: ${url}`);
             try {
                 const res = await gmFetch(url, { method: "HEAD" });
-                const exists = res.status !== 404 || res.finalUrl !== url;
-                console.log(`[${label}] ${exists ? "✅ Exists" : "❌ No video"}: ${url} (${res.status})`);
+                const isNot404 = res.status !== 404;
+                const isRedirected = res.finalUrl !== url;
+                const exists = isNot404 || isRedirected;
+                console.log(`[${label}] status=${res.status}, finalUrl=${res.finalUrl}`);
+                console.log(`[${label}] isNot404=${isNot404}, isRedirected=${isRedirected}, exists=${exists}`);
+                console.log(`[${label}] ${exists ? "✅ Exists" : "❌ No video"}: ${url}`);
                 return exists;
             } catch (err) {
                 console.error(`[${label}] checkVideoExists failed:`, err);
@@ -3153,10 +3157,17 @@
             console.log(`[Nyaa] Fetching: ${url}`);
             try {
                 const res = await gmFetch(url);
+                console.log(`[Nyaa] status=${res.status}, finalUrl=${res.finalUrl}`);
                 if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
                 const doc = new DOMParser().parseFromString(res.responseText, "text/html");
+                const allRows = doc.querySelectorAll("table.torrent-list tbody tr");
+                console.log(`[Nyaa] Total rows in table: ${allRows.length}`);
                 const torrents = extractFilteredTorrents(doc, minSeeders, minSizeGiB);
                 const has = torrents.length > 0;
+                console.log(`[Nyaa] Filtered torrents: ${torrents.length}/${allRows.length} (minSeeders>${minSeeders}, minSize>${minSizeGiB}GiB)`);
+                if (torrents.length > 0) {
+                    torrents.forEach((t, i) => console.log(`[Nyaa]   #${i+1}: seeders=${t.seeders}, size=${t.size}`));
+                }
                 console.log(`[Nyaa] ${has ? "✅ Found torrents" : "❌ No torrents"}: ${url}`);
                 return has;
             } catch (err) {
@@ -3189,15 +3200,23 @@
         function extractFilteredTorrents(doc, minSeeders, minSizeGiB) {
             const rows = [...doc.querySelectorAll("table.torrent-list tbody tr")];
             return rows
-                .map(row => {
+                .map((row, idx) => {
+                    const nameText = row.querySelector("td:nth-child(2) a:last-of-type")?.textContent.trim() ?? "";
                     const sizeText = row.querySelector("td:nth-child(4)")?.textContent.trim() ?? "";
                     const seedersText = row.querySelector("td:nth-child(6)")?.textContent.trim() ?? "";
                     const torrentLink = row.querySelector("td:nth-child(3) a[href$='.torrent']")?.href;
-                    if (!torrentLink) return null;
+                    if (!torrentLink) {
+                        console.log(`[Nyaa]   row#${idx}: SKIP (no torrent link)`);
+                        return null;
+                    }
 
                     const seeders = parseInt(seedersText, 10) || 0;
                     const sizeGiB = parseSizeToGiB(sizeText);
-                    return seeders > minSeeders && sizeGiB > minSizeGiB
+                    const passSeeder = seeders > minSeeders;
+                    const passSize = sizeGiB > minSizeGiB;
+                    const pass = passSeeder && passSize;
+                    console.log(`[Nyaa]   row#${idx}: name="${nameText.substring(0, 60)}" seeders=${seeders}(>${minSeeders}?${passSeeder}) size=${sizeText}/${sizeGiB.toFixed(2)}GiB(>${minSizeGiB}?${passSize}) => ${pass ? "✅PASS" : "❌FILTERED"}`);
+                    return pass
                         ? { torrent: torrentLink, seeders, size: sizeText }
                         : null;
                 })
