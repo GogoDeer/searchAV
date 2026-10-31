@@ -23,7 +23,7 @@ There is no compilation step, build system, or test suite. This is a pure usersc
 The main userscript is structured as an IIFE executed at `document-idle` via `@run-at document-idle`. Core legacy functions live within the root IIFE scope, while newer complex capabilities (such as `IconButtonUtils`) are encapsulated into isolated sub-modules to prevent scope pollution and minimize upstream merge conflicts.
 
 ### Initialization & Lifecycle
-1. **Exclusion Check**: Match URL against blacklist (`.claude/settings.local.json`, LLM/AI services, developer tools, shopping sites).
+1. **Exclusion Check**: Match URL against userscript `@exclude` rules and path checks (LLM/AI services, developer tools, shopping sites).
 2. **Global State**: Initialize `window.qxin` for communication with `@require`-ed scripts.
 3. **Settings Loading**: Read user configuration from `GM_getValue("_setting")` and `GM_getValue("_setting2")`.
 4. **Pattern Setup**: Compile regular expressions for standard IDs (`oRegExp`), uncensored/amateur IDs (`oRegExp_wuma`), magnet links (`oRegExp_Magnet`), and exclusion patterns.
@@ -31,7 +31,7 @@ The main userscript is structured as an IIFE executed at `document-idle` via `@r
 6. **Preview Table**: Build `cid` lookup table for DMM preview video streaming.
 7. **DOM Matching**: Call `findAVID()` to scan DOM nodes, then `addStyle()` to inject CSS into the page.
 8. **SPA & MutationObserver Guard**:
-   - Automatically polls URL changes (`popstate`, `pushState`, Next.js / React 18 / Vue routers) to re-scan dynamically loaded pages.
+   - Automatically polls URL changes (`popstate`, `pushState`, Next.js / React 18 / Vue routers) with debounce to re-scan dynamically loaded pages.
    - Monitors DOM additions with `MutationObserver`, guarded by `try...finally` and SVG class/tag type checks to avoid breaking on non-HTMLElement nodes.
 
 ### Core subsystems
@@ -41,9 +41,12 @@ The main userscript is structured as an IIFE executed at `document-idle` via `@r
 - **Resource Checking & Icon Buttons** (`IconButtonUtils`):
   - Injects action icons (🎬 Jable, 🎞️ 123AV, 🌱 Nyaa/Sukebei) based on `setting.list_all`.
   - **Strategy Pattern (`SITE_STRATEGIES`)**: Autonomous per-site validation rules, selector logic, classes, and tooltip copy.
-  - **Concurrency Queue (`MAX_CONCURRENCY = 3`, 60ms throttle)**: Eliminates rate-limiting (HTTP 429) and IP bans from bursting dozens of cross-origin requests simultaneously.
-  - **Cloudflare & Anti-Bot Defense**: Automatically detects CF Turnstile / Challenge (403/503 "Just a moment...") and renders prominent warning styles (`sav-warn-*`) instead of misleading false-negatives (disabled/grayscale), guiding users to pass the challenge manually.
-  - **Cache Isolation (`_external_link_cache_v2`)**: Caches trusted positive/negative results for 24 hours while strictly avoiding persisting transient challenge, rate-limited, or network error states.
+  - **Quality Filtering Rules**: Nyaa torrent checks require `seeders >= 1` and `size >= 2GiB`.
+  - **In-Memory Domain Circuit Breaker**: Trips on anti-bot challenge (CF 403/503), immediately short-circuiting subsequent requests to that domain on the current page into warning state to prevent 403 request flooding and IP bans.
+  - **Per-Domain Concurrency Queue**: Total concurrency 4, per-domain concurrency 2; eliminates starvation caused by slow or hanging sites.
+  - **Viewport Lazy Loading**: Uses `IntersectionObserver` (300px prefetch margin) to only trigger network validation when icons enter view.
+  - **Cloudflare & Anti-Bot Defense**: Dynamically uses native `navigator.userAgent` to avoid clearance cookie mismatch; renders prominent warning styles (`sav-warn-*`) instead of misleading false-negatives (disabled/grayscale), guiding users to pass the challenge manually.
+  - **Tiered Cache Isolation (`_external_link_cache_v2`)**: 24-hour TTL for positive confirmed resources, 3-hour TTL for negative results (404 / 0 seeders) to quickly pick up new releases, while strictly avoiding persisting transient challenge, rate-limited, or network error states.
 - **Info Fetching** (`getInfo`, `getInfo_wuma`, `getInfo_fc2`): Fetches metadata (title, actors, tags, cover image) from JavBus, JavDB, or FC2Hub via `GM_xmlhttpRequest`. Results are cached in `GM_setValue("avInfo2", ...)`.
 - **Popup Menu** (`createPattenr`): Generates a floating HUD with direct search buttons, cover image preview, actor links, tags, and translation tools.
 - **Preview Videos** (`getVideo`, `queryDMMVideoURL`, `getVideoURLFC2`): Fetches and streams short preview clips from DMM or FC2 with fallback to third-party mirrors.

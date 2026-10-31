@@ -1,0 +1,6 @@
+# Claude / Gemini local configurations
+.claude/
+.gemini/
+
+# Logs & temp files
+*.log

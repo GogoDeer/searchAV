@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         根据番号快速搜索
 // @namespace    https://github.com/qxinGitHub/searchAV
-// @version      0.24.10
+// @version      0.24.11
 // @description  标记网页上的所有番号, 在相关网站快速方便的进行搜索
 // @author       iqxin
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAABLdJREFUWEftmG2IVGUUx3//O6MZapIftJTeKAqDiqiPGllZSdqHXsw3KmNnpm1LzYqgAleoMAJLw2xmdtsKqS3BkIy0QDSS6FNIkAgRilhUkPjGprtzTzx3d2fv3L0z986upB+6X+855/6e5znnf55zZWYTOY8fOUBJJ85HxoDtf8BRHM2odtAM0cF0fC6oMnicpoUjEjYKrqpr04DWxTjOsNQ8Chg3AWNiQHoR++RTZCybtYx/RgqbGtA6mej3sVziRaCZqj9h0O79xga109csaCpAK3KDiW7g+mY/ELL/WcZCFfipmRiJgFZinsFHwMXNBK5je1SwSHl2po3VENBKzDWjG3FRQkCXY8chsBvX0NY4LrFQeb5KA1kX0Dq5zip8DVweE8gHDkis5Qxb1cbJQRvbyASyLDHxPHBNLIRxQD53qpUjSZCxgE4+/BKfSDwSE+CU4FlydDSSEmsn61/KCok1wPhoHIP3vRwtSXIUD1jkbhNbYwIPy6FgMWWeE8wyY3emwFthGHuP+SY2x6TJUXnMVwt7G+3iMED3QSuzBXgw4tgjn6V6MgAfEtIOJpvPLgg0cZ887lALf9fYlGkzC8BrNNOgnMmTbw6wzFVuJ6K5V+9ILA1g/ZQ5pF5mqY3D9SCH72CRxSY+BLJD28RxwX0q8N2wXEoB6HysyEyDLyNHfXpAdj5PDVgp8aYIKjD8/KBe7gpXa7Vq0wLW2g2t3ViTKdCeGtAv8xnGwzU5BB9k8iwLLgdF5iGuGHzve1won2cQl2EcNo93PJ+e0O4fosB2V61+iS+AeTWxjY2ZAk+nByyxA7gnArg+k2elFbnaFFTd1CT9Cr2vFk6lxNuCFRHfnV6ee88OYH8BuTycdhYBt3t55qcGrJToEjxe4yC2eDkWBMnewWQqNX15UqBzMAPYL2MpcKzqn+HooOz4DU4nPWCRdonVEYdYfRsETtLBwG4jl9gY9gDXhmML2pTn3dSAFt9FegQLlGf7iGWmzKNmdNbIF5yS8YAKQc+PfYbr4CamWCYQandk4We3xjA3ejtOJdT9EuMgbonE3K8Kt6uVP1MDOsNKkdckXoo4+WZs8PKsCjf4GkDjR8FsFYZycODisU5iOeBFJOb1TIGXGxVc/GWhzAwzvgGmR5x7DVZ7OdbWQJaZis8EQgUR5F1/i3tV4oWY2eWgKsxWKwebBgx2scQawSvRVQPuLrhNWQp6gr/qHs0mplsmyLk5MTH6XLdSnvVJclX/wtrFOOvlU+D+OkF6gV2CbjJ8Tx99ZMnSxywTi4GZdSa+wXB7VGFBo/zrP4UGfxbMFYzHDsTNSSsd4ftEyOShqZNp5rMN49YRQiS5NYRMBAy22c3EleCWk4vJpyQA994NVa4YnEjXVPKAc13IVICDBFbmRrMgsW9LCeoK6lsZrfzOL/401rnO0QxkU4BV0E1M8bM8Jp9FiCuBSQMfdUDHMA66mcar0BWe3IJBqknIEQGmOdP6nSHQxljhjjvu/xwwJOB1IcPD1DkBTAG5VyeZo1X0nDPARpAmPs7kWJIo1KPJtbS+A/36DYmVQedxF44KD+kpfj0vAKvK4P7pjGW8cvxRe+MZaHVpV3wu7P4FjSUI5qMsu14AAAAASUVORK5CYII=
@@ -99,6 +99,7 @@
 // @grant       GM_setClipboard
 // @grant       GM_registerMenuCommand
 // @grant       GM_openInTab
+// @grant       unsafeWindow
 // @run-at      document-idle
 
 // ==/UserScript==
@@ -537,11 +538,16 @@
     // 延时执行, 解决javbus论坛通过搜索进入的帖子无发弹出工具栏的问题
     setTimeout(findAVID,300);
 
-    // 支持 Next.js 等 SPA 路由切换后自动重新匹配番号
+    // 支持 Next.js 等 SPA 路由切换后自动重新匹配番号（带防抖控制，避免高频 replaceState 导致冗余全页重扫）
+    let spaDebounceTimer = null;
+    let spaSecondaryTimer = null;
     function handleSPARoute() {
-        setTimeout(findAVID, 200);
-        setTimeout(findAVID, 600);
-        setTimeout(findAVID, 1200);
+        if (spaDebounceTimer) clearTimeout(spaDebounceTimer);
+        if (spaSecondaryTimer) clearTimeout(spaSecondaryTimer);
+        spaDebounceTimer = setTimeout(function() {
+            findAVID();
+            spaSecondaryTimer = setTimeout(findAVID, 600);
+        }, 150);
     }
     window.addEventListener("popstate", handleSPARoute);
     try {
@@ -864,13 +870,23 @@
 
     /**
      * 格式化搜索URL
-     * 如果是 123av.com 或 jable.tv 的链接，将生成的 URL 整体转为规范小写
+     * 如果是 123av.com 或 jable.tv 的链接，将生成的 URL 整体转为规范小写（限定域名匹配，防止误伤其他网站参数）
      */
     function formatSearchURL(searchURL, avID) {
         if (!searchURL) return "";
         const url = searchURL.replace("%s", avID || "");
-        const lower = url.toLowerCase();
-        return (lower.includes("123av") || lower.includes("jable.tv")) ? lower : url;
+        try {
+            const parsed = new URL(url);
+            if (parsed.hostname.includes("123av") || parsed.hostname.includes("jable.tv")) {
+                return url.toLowerCase();
+            }
+        } catch (e) {
+            const lower = url.toLowerCase();
+            if (lower.includes("123av.com") || lower.includes("jable.tv")) {
+                return lower;
+            }
+        }
+        return url;
     }
 
     // 创建搜索基本菜单(搜索按钮)
@@ -3080,13 +3096,46 @@
     }
 
     // ============================================================
-    // 📦 模块：IconButtonUtils (v2.1 - 策略模式封装，防假阳/假阴性，支持TiB，CF高亮警示)
+    // 📦 模块：IconButtonUtils (v2.2 - 策略模式，域名熔断，按域隔离并发，分级TTL，视口懒加载，精准404)
     // ============================================================
     const IconButtonUtils = (() => {
 
         const CACHE_KEY = "_external_link_cache_v2";
-        const CACHE_TTL = 24 * 60 * 60 * 1000; // 正常可信结果缓存 24 小时
+        const POSITIVE_CACHE_TTL = 24 * 60 * 60 * 1000; // 有效资源缓存 24 小时
+        const NEGATIVE_CACHE_TTL = 3 * 60 * 60 * 1000;  // 负向结果（404/无种子）缓存 3 小时，兼顾新片刚出种或上传
         const inflightChecks = new Map(); // 内存级去重：URL -> Promise<CheckResult>
+
+        // --- 域名级瞬态熔断器（仅当前页面内存生命周期，防止单个站点被CF拦截后同页面持续发送403轰炸） ---
+        const domainCircuitBreakers = new Map(); // domain -> { timestamp, reason }
+        const CIRCUIT_COOLDOWN = 10 * 60 * 1000; // 熔断冷却 10 分钟
+
+        function getDomainFromUrl(url) {
+            try {
+                return new URL(url).hostname.toLowerCase();
+            } catch (e) {
+                return "";
+            }
+        }
+
+        function tripDomainCircuit(url, reason) {
+            const domain = getDomainFromUrl(url);
+            if (!domain) return;
+            if (!domainCircuitBreakers.has(domain)) {
+                logWarn(`[CircuitBreaker] ⚡ 站点 ${domain} 触发保护性熔断 (${reason})，当前页面后续请求将快速短路标黄！`);
+            }
+            domainCircuitBreakers.set(domain, { timestamp: Date.now(), reason });
+        }
+
+        function checkDomainCircuit(url) {
+            const domain = getDomainFromUrl(url);
+            if (!domain || !domainCircuitBreakers.has(domain)) return null;
+            const info = domainCircuitBreakers.get(domain);
+            if (Date.now() - info.timestamp < CIRCUIT_COOLDOWN) {
+                return info;
+            }
+            domainCircuitBreakers.delete(domain);
+            return null;
+        }
 
         // 自动清理旧版被污染的脏缓存
         try {
@@ -3113,7 +3162,7 @@
             console.log(logPrefix + " " + msg, prefixStyle, "color: #8b5cf6;", ...args);
         }
 
-        // --- 缓存管理 ---
+        // --- 缓存管理（分级TTL） ---
         function normalizeCacheKey(url) {
             return (url || "").trim().toLowerCase();
         }
@@ -3122,22 +3171,26 @@
             const cache = GM_getValue(CACHE_KEY, {});
             const key = normalizeCacheKey(url);
             const item = cache[key];
-            if (item && (Date.now() - item.time < CACHE_TTL)) {
-                return item.val;
+            if (item && item.time) {
+                const ttl = item.ttl || (item.val ? POSITIVE_CACHE_TTL : NEGATIVE_CACHE_TTL);
+                if (Date.now() - item.time < ttl) {
+                    return item.val;
+                }
             }
             return null;
         }
 
-        function setCache(url, val) {
+        function setCache(url, exists) {
             let cache = GM_getValue(CACHE_KEY, {});
             const key = normalizeCacheKey(url);
             const now = Date.now();
+            const ttl = exists ? POSITIVE_CACHE_TTL : NEGATIVE_CACHE_TTL;
             const entries = Object.entries(cache);
             if (entries.length > 500) {
                 const sorted = entries.sort((a, b) => b[1].time - a[1].time);
                 cache = Object.fromEntries(sorted.slice(0, 300));
             }
-            cache[key] = { val, time: now };
+            cache[key] = { val: exists, time: now, ttl };
             GM_setValue(CACHE_KEY, cache);
         }
 
@@ -3147,14 +3200,16 @@
             logSuccess("✅ 资源有效性检测缓存已清空！");
         }
 
-        // --- 异步并发队列（限制最大并发，防止瞬时过多请求被封禁或超时） ---
-        const MAX_CONCURRENCY = 3;
+        // --- 异步并发队列（总并发限制 + 按域名并发隔离，防止单个慢站拖垮全局） ---
+        const MAX_CONCURRENCY = 4;
+        const MAX_PER_DOMAIN = 2;
         let activeRequests = 0;
-        const requestQueue = [];
+        const activeByDomain = new Map(); // domain -> count
+        const requestQueue = []; // Array<{ url, taskFn, resolve, reject }>
 
-        function enqueueTask(taskFn) {
+        function enqueueTask(url, taskFn) {
             return new Promise((resolve, reject) => {
-                requestQueue.push({ taskFn, resolve, reject });
+                requestQueue.push({ url, taskFn, resolve, reject });
                 scheduleNext();
             });
         }
@@ -3163,18 +3218,37 @@
             if (activeRequests >= MAX_CONCURRENCY || requestQueue.length === 0) {
                 return;
             }
+
+            // 按域名隔离调度：优先寻找当前域名活跃数未超限的任务
+            const taskIndex = requestQueue.findIndex(item => {
+                const domain = getDomainFromUrl(item.url);
+                return (activeByDomain.get(domain) || 0) < MAX_PER_DOMAIN;
+            });
+
+            if (taskIndex === -1) {
+                return; // 当前所有待执行任务的域名均已达上限，等待运行中任务结束
+            }
+
+            const [item] = requestQueue.splice(taskIndex, 1);
+            const domain = getDomainFromUrl(item.url);
             activeRequests++;
-            const { taskFn, resolve, reject } = requestQueue.shift();
+            activeByDomain.set(domain, (activeByDomain.get(domain) || 0) + 1);
 
             setTimeout(() => {
-                taskFn()
-                    .then(res => resolve(res))
-                    .catch(err => reject(err))
+                item.taskFn()
+                    .then(res => item.resolve(res))
+                    .catch(err => item.reject(err))
                     .finally(() => {
                         activeRequests--;
+                        const cur = activeByDomain.get(domain) || 1;
+                        if (cur <= 1) {
+                            activeByDomain.delete(domain);
+                        } else {
+                            activeByDomain.set(domain, cur - 1);
+                        }
                         scheduleNext();
                     });
-            }, 60);
+            }, 50);
         }
 
         function sanitizeIcon(icon) {
@@ -3190,16 +3264,20 @@
         async function gmFetch(url, options = {}) {
             const method = options.method || "GET";
             const timeout = options.timeout || 12000;
+            const headers = {
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
+                ...options.headers
+            };
+            // 动态使用宿主浏览器的真实 User-Agent，避免硬编码导致与 cf_clearance / TLS 指纹冲突
+            if (typeof navigator !== "undefined" && navigator.userAgent) {
+                headers["User-Agent"] = navigator.userAgent;
+            }
             return new Promise((resolve, reject) => {
                 GM_xmlhttpRequest({
                     method,
                     url,
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                        "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
-                        ...options.headers
-                    },
+                    headers,
                     timeout,
                     onload: res => {
                         resolve({
@@ -3212,6 +3290,19 @@
                     onerror: err => reject(err || new Error("Network Error"))
                 });
             });
+        }
+
+        // --- 提取 HTML 中的 <title> 标签，用于精准 404 检测 ---
+        function extractPageTitle(html) {
+            if (!html) return "";
+            const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+            return match ? match[1].trim() : "";
+        }
+
+        function is404Title(title) {
+            if (!title) return false;
+            const lower = title.toLowerCase();
+            return lower.includes("404") || lower.includes("not found") || lower.includes("页面未找到") || lower.includes("頁面未找到") || lower.includes("找不到页面");
         }
 
         // --- 统一的安全与拦截前置检查 ---
@@ -3228,12 +3319,14 @@
             );
             if ((isCfStatus && (!text || hasCfKeywords)) || (text && text.includes("Just a moment...") && text.includes("cloudflare"))) {
                 logWarn(`[${label}] ⚠️ 触发 Cloudflare 真人安全验证 (Status: ${status})！\nURL: ${url}\n👉 请点击按钮手动打开页面完成人机验证后再试。`);
+                tripDomainCircuit(url, "Cloudflare真人安全验证");
                 return { isIntercepted: true, result: { trusted: false, exists: false, isChallenge: true, reason: "Cloudflare真人安全验证" } };
             }
 
             // 2. 429 速率限制检查
             if (status === 429) {
                 logWarn(`[${label}] ⚠️ 触发 429 速率限制，暂不缓存: ${url}`);
+                tripDomainCircuit(url, "429 速率限制");
                 return { isIntercepted: true, result: { trusted: false, exists: false, isRateLimit: true, reason: "429 Rate Limited" } };
             }
 
@@ -3253,11 +3346,12 @@
                 if (security.isIntercepted) return security.result;
 
                 const finalUrlLower = (res.finalUrl || "").toLowerCase();
+                const pageTitle = extractPageTitle(res.responseText);
                 const isRedirectedTo404 = finalUrlLower.includes("/404") || finalUrlLower === "https://jable.tv/" || finalUrlLower === "https://jable.tv";
-                const is404Content = res.responseText.includes("404 Not Found") || res.responseText.includes("<title>404");
+                const is404Content = is404Title(pageTitle);
 
                 if (res.status === 404 || isRedirectedTo404 || is404Content) {
-                    logDebug(`[Jable] ❌ 视频不存在 (404/重定向到404页面): ${normalizedUrl}`);
+                    logDebug(`[Jable] ❌ 视频不存在 (404/重定向到404页面): ${normalizedUrl} (Title: ${pageTitle})`);
                     return { trusted: true, exists: false, reason: "404 Not Found" };
                 }
 
@@ -3275,19 +3369,19 @@
         }
 
         // ============================================================
-        // 🎞️ 123AV 检测实现（使用 GET 全文分析，避免 HEAD 软 404 假阳性与拦截误判）
+        // 🎞️ 123AV 检测实现（使用 GET 全文分析，精准title检测软404）
         // ============================================================
         async function check123avVideo(url, avID) {
             const normalizedUrl = url.toLowerCase();
             logInfo(`[123AV] 🔍 检查: ${normalizedUrl} (番号: ${avID})`);
             try {
-                // 统一使用 GET 获取页面进行特征分析，彻底解决 HEAD 产生的软404假阳性及403无正文误判
                 const res = await gmFetch(normalizedUrl, { method: "GET" });
 
                 const security = checkSecurityInterception(res.status, res.responseText, "123AV", normalizedUrl);
                 if (security.isIntercepted) return security.result;
 
                 const finalUrlLower = (res.finalUrl || "").toLowerCase().replace(/\/+$/, "");
+                const pageTitle = extractPageTitle(res.responseText);
                 const isRedirectedTo404 = finalUrlLower.includes("/404") ||
                                          finalUrlLower === "https://123av.com" ||
                                          finalUrlLower.endsWith("123av.com/zh") ||
@@ -3295,12 +3389,10 @@
                                          finalUrlLower.endsWith("123av.com/ja") ||
                                          finalUrlLower.endsWith("123av.com/en");
 
-                const is404Content = res.responseText.includes("404 — 123AV") ||
-                                     res.responseText.includes("404 Not Found") ||
-                                     res.responseText.includes("<title>404");
+                const is404Content = is404Title(pageTitle) || pageTitle.includes("404 — 123AV");
 
                 if (res.status === 404 || isRedirectedTo404 || is404Content) {
-                    logDebug(`[123AV] ❌ 视频不存在 (404/重定向到首页): ${normalizedUrl}`);
+                    logDebug(`[123AV] ❌ 视频不存在 (404/重定向到首页): ${normalizedUrl} (Title: ${pageTitle})`);
                     return { trusted: true, exists: false, reason: "404 Not Found" };
                 }
 
@@ -3317,9 +3409,9 @@
         }
 
         // ============================================================
-        // 🌱 Nyaa / Sukebei 检测实现
+        // 🌱 Nyaa / Sukebei 检测实现 (要求: 做种>=1 且 大小>=2GiB)
         // ============================================================
-        async function checkNyaaTorrent(url, avID, minSeeders = 1, minSizeGiB = 0.5) {
+        async function checkNyaaTorrent(url, avID, minSeeders = 1, minSizeGiB = 2) {
             logInfo(`[Nyaa] 🔍 检索种子: ${url} (番号: ${avID})`);
             try {
                 const res = await gmFetch(url, { method: "GET" });
@@ -3410,12 +3502,12 @@
             {
                 name: "Nyaa",
                 match: (url) => url.includes("nyaa"),
-                check: checkNyaaTorrent,
+                check: (url, avID) => checkNyaaTorrent(url, avID, 1, 2),
                 classSuccess: "sav-has-seeders",
                 classFail: "sav-no-seeders",
                 classWarn: "sav-warn-seeders",
-                tipSuccess: "已检测到可用做种种子，点击打开",
-                tipFail: "未检测到有效做种种子",
+                tipSuccess: "已检测到可用做种种子(做种>=1,大小>=2GiB)，点击打开",
+                tipFail: "未检测到有效做种种子(需做种>=1,大小>=2GiB)",
                 tipWarn: "⚠️ 检测种子触发安全验证或限流，点击打开查看"
             },
             {
@@ -3448,7 +3540,7 @@
         }
 
         // ============================================================
-        // 🔄 统一状态调度入口（并发队列 + 飞行去重 + 可信结果缓存）
+        // 🔄 统一状态调度入口（熔断器短路 + 隔离并发队列 + 飞行去重 + 可信结果缓存）
         // ============================================================
         function fetchStatus(url, strategy, avID) {
             const cacheKey = normalizeCacheKey(url);
@@ -3456,7 +3548,23 @@
                 return inflightChecks.get(cacheKey);
             }
 
-            const promise = enqueueTask(async () => {
+            // 检查域名是否处于保护性熔断冷却中
+            const circuit = checkDomainCircuit(url);
+            if (circuit) {
+                logDebug(`[CircuitBreaker] ⚡ 短路跳过 ${url} (${circuit.reason} 熔断保护期)`);
+                return Promise.resolve({
+                    trusted: false,
+                    exists: false,
+                    isChallenge: true,
+                    reason: `${circuit.reason} (熔断保护中)`
+                });
+            }
+
+            const promise = enqueueTask(url, async () => {
+                const c = checkDomainCircuit(url);
+                if (c) {
+                    return { trusted: false, exists: false, isChallenge: true, reason: `${c.reason} (熔断保护中)` };
+                }
                 return await strategy.check(url, avID);
             }).then(checkResult => {
                 if (checkResult && checkResult.trusted) {
@@ -3495,6 +3603,28 @@
             } else {
                 buttonDiv.classList.add(strategy.classFail);
                 buttonDiv.title = strategy.tipFail + (fromCache ? " (来自缓存)" : "");
+            }
+        }
+
+        // --- 视口懒加载观察者（预加载 300px） ---
+        let lazyObserver = null;
+        if (typeof IntersectionObserver !== "undefined") {
+            try {
+                lazyObserver = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const target = entry.target;
+                            lazyObserver.unobserve(target);
+                            const triggerFn = target._savTriggerFetch;
+                            if (typeof triggerFn === "function") {
+                                delete target._savTriggerFetch;
+                                triggerFn();
+                            }
+                        }
+                    });
+                }, { rootMargin: "300px 0px" });
+            } catch (e) {
+                lazyObserver = null;
             }
         }
 
@@ -3541,19 +3671,29 @@
                         applyButtonState(buttonDiv, strategy, cached, null, true);
                     } else {
                         buttonDiv.classList.add("loading-status", "sav-icon-loading");
-                        buttonDiv.title = "正在检测资源有效性...";
+                        buttonDiv.title = "等待进入视口后检测资源有效性...";
 
-                        fetchStatus(finalURL, strategy, avID).then(checkResult => {
-                            const isTrusted = !!checkResult?.trusted;
-                            const exists = checkResult ? checkResult.exists : false;
-                            let warnReason = null;
-                            if (!isTrusted) {
-                                warnReason = (checkResult?.isChallenge || checkResult?.isRateLimit)
-                                    ? strategy.tipWarn
-                                    : `⚠️ 检测未完成 (${checkResult?.reason || "网络异常"})，请点击直接打开查看`;
-                            }
-                            applyButtonState(buttonDiv, strategy, exists, warnReason, false);
-                        });
+                        const triggerFetch = () => {
+                            buttonDiv.title = "正在检测资源有效性...";
+                            fetchStatus(finalURL, strategy, avID).then(checkResult => {
+                                const isTrusted = !!checkResult?.trusted;
+                                const exists = checkResult ? checkResult.exists : false;
+                                let warnReason = null;
+                                if (!isTrusted) {
+                                    warnReason = (checkResult?.isChallenge || checkResult?.isRateLimit)
+                                        ? strategy.tipWarn
+                                        : `⚠️ 检测未完成 (${checkResult?.reason || "网络异常"})，请点击直接打开查看`;
+                                }
+                                applyButtonState(buttonDiv, strategy, exists, warnReason, false);
+                            });
+                        };
+
+                        if (lazyObserver) {
+                            buttonDiv._savTriggerFetch = triggerFetch;
+                            lazyObserver.observe(buttonDiv);
+                        } else {
+                            triggerFetch();
+                        }
                     }
                 }
             });
