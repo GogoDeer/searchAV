@@ -3261,22 +3261,30 @@
             return str;
         }
 
-        // --- 尝试使用 GM_cookie 获取目标域名 Cookie（包含 HttpOnly 的 cf_clearance） ---
+        // --- 尝试使用 GM_cookie 获取目标站点 Cookie（包含 HttpOnly 的 cf_clearance，带超时保护） ---
         async function getDomainCookie(url) {
-            if (typeof GM_cookie !== "undefined" && GM_cookie.list) {
+            if (typeof GM_cookie !== "undefined" && GM_cookie.list && url) {
                 try {
-                    const domain = getDomainFromUrl(url);
-                    if (!domain) return "";
-                    return await new Promise((resolve) => {
-                        GM_cookie.list({ domain }, (cookies, error) => {
+                    const listByDetails = (details) => new Promise((resolve) => {
+                        GM_cookie.list(details, (cookies, error) => {
                             if (error || !cookies || !cookies.length) {
                                 resolve("");
                                 return;
                             }
-                            const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join("; ");
-                            resolve(cookieStr);
+                            resolve(cookies.map(c => `${c.name}=${c.value}`).join("; "));
                         });
                     });
+                    const fetchCookieTask = async () => {
+                        // 优先按完整 URL 匹配（自动覆盖父级域名如 .jable.tv / .nyaa.si 及路径）
+                        const byUrl = await listByDetails({ url });
+                        if (byUrl) return byUrl;
+                        const domain = getDomainFromUrl(url);
+                        return domain ? await listByDetails({ domain }) : "";
+                    };
+                    return await Promise.race([
+                        fetchCookieTask(),
+                        new Promise(resolve => setTimeout(() => resolve(""), 1500))
+                    ]);
                 } catch (e) {
                     return "";
                 }
@@ -3667,6 +3675,44 @@
             }
         }
 
+        // --- 统一执行单个按钮的资源检测与状态更新 ---
+        function executeButtonCheck(buttonDiv, finalURL, strategy, avID) {
+            // 懒加载延迟触发期间，同 URL 的其他按钮可能已写入缓存，先重查避免重复请求
+            const cachedNow = getCache(finalURL);
+            if (cachedNow !== null) {
+                applyButtonState(buttonDiv, strategy, cachedNow, null, true);
+                return;
+            }
+            buttonDiv.classList.remove(strategy.classWarn);
+            buttonDiv.classList.add("loading-status", "sav-icon-loading");
+            buttonDiv.title = "正在检测资源有效性...";
+            fetchStatus(finalURL, strategy, avID).then(checkResult => {
+                const isTrusted = !!checkResult?.trusted;
+                const exists = checkResult ? checkResult.exists : false;
+                let warnReason = null;
+                if (!isTrusted) {
+                    warnReason = (checkResult?.isChallenge || checkResult?.isRateLimit)
+                        ? strategy.tipWarn
+                        : `⚠️ 检测未完成 (${checkResult?.reason || "网络异常"})，请点击直接打开查看`;
+                }
+                applyButtonState(buttonDiv, strategy, exists, warnReason, false);
+            });
+        }
+
+        // --- 将按钮交由视口懒加载观察者（或立即触发检测） ---
+        function observeOrCheckButton(buttonDiv, finalURL, strategy, avID) {
+            buttonDiv.classList.remove(strategy.classWarn);
+            buttonDiv.classList.add("loading-status", "sav-icon-loading");
+            if (lazyObserver) {
+                buttonDiv.title = "等待进入视口后检测资源有效性...";
+                buttonDiv._savTriggerFetch = () => executeButtonCheck(buttonDiv, finalURL, strategy, avID);
+                lazyObserver.unobserve(buttonDiv);
+                lazyObserver.observe(buttonDiv);
+            } else {
+                executeButtonCheck(buttonDiv, finalURL, strategy, avID);
+            }
+        }
+
         /**
          * 主方法：添加搜索列表的Icon按钮到番号旁
          * @param {Array} list_all - 搜索列表配置数组, 来自 setting.list_all
@@ -3714,65 +3760,27 @@
                     if (cached !== null) {
                         applyButtonState(buttonDiv, strategy, cached, null, true);
                     } else {
-                        buttonDiv.classList.add("loading-status", "sav-icon-loading");
-                        buttonDiv.title = "等待进入视口后检测资源有效性...";
-
-                        const triggerFetch = () => {
-                            // 懒加载延迟触发期间，同 URL 的其他按钮可能已写入缓存，先重查避免重复请求
-                            const cachedNow = getCache(finalURL);
-                            if (cachedNow !== null) {
-                                applyButtonState(buttonDiv, strategy, cachedNow, null, true);
-                                return;
-                            }
-                            buttonDiv.title = "正在检测资源有效性...";
-                            fetchStatus(finalURL, strategy, avID).then(checkResult => {
-                                const isTrusted = !!checkResult?.trusted;
-                                const exists = checkResult ? checkResult.exists : false;
-                                let warnReason = null;
-                                if (!isTrusted) {
-                                    warnReason = (checkResult?.isChallenge || checkResult?.isRateLimit)
-                                        ? strategy.tipWarn
-                                        : `⚠️ 检测未完成 (${checkResult?.reason || "网络异常"})，请点击直接打开查看`;
-                                }
-                                applyButtonState(buttonDiv, strategy, exists, warnReason, false);
-                            });
-                        };
-
-                        if (lazyObserver) {
-                            buttonDiv._savTriggerFetch = triggerFetch;
-                            lazyObserver.observe(buttonDiv);
-                        } else {
-                            triggerFetch();
-                        }
+                        observeOrCheckButton(buttonDiv, finalURL, strategy, avID);
                     }
                 }
             });
         }
 
         // --- 窗口重获焦点时自动重试告警按钮（如用户在弹出标签页完成CF验证后切回原页面） ---
+        let lastRecheckTime = 0;
         function recheckWarningButtons() {
+            const now = Date.now();
+            if (now - lastRecheckTime < 2000) return;
             const warnButtons = document.querySelectorAll('.sav-warn-video, .sav-warn-seeders');
             if (warnButtons.length === 0) return;
+            lastRecheckTime = now;
             logInfo(`[CircuitBreaker] 🔄 页面重新聚焦，自动复检 ${warnButtons.length} 个警告状态按钮...`);
             warnButtons.forEach(btn => {
                 const url = btn.dataset.url;
                 const avID = btn.dataset.avid;
                 const strategy = findStrategy(url);
                 if (strategy && url) {
-                    btn.classList.remove(strategy.classWarn);
-                    btn.classList.add("loading-status", "sav-icon-loading");
-                    btn.title = "正在重新检测资源有效性...";
-                    fetchStatus(url, strategy, avID).then(checkResult => {
-                        const isTrusted = !!checkResult?.trusted;
-                        const exists = checkResult ? checkResult.exists : false;
-                        let warnReason = null;
-                        if (!isTrusted) {
-                            warnReason = (checkResult?.isChallenge || checkResult?.isRateLimit)
-                                ? strategy.tipWarn
-                                : `⚠️ 检测未完成 (${checkResult?.reason || "网络异常"})，请点击直接打开查看`;
-                        }
-                        applyButtonState(btn, strategy, exists, warnReason, false);
-                    });
+                    observeOrCheckButton(btn, url, strategy, avID);
                 }
             });
         }
@@ -3780,8 +3788,8 @@
         window.addEventListener("focus", () => {
             if (domainCircuitBreakers.size > 0) {
                 domainCircuitBreakers.clear();
-                recheckWarningButtons();
             }
+            recheckWarningButtons();
         });
 
         return { addIconButtons, clearExternalCache };
