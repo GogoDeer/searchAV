@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         根据番号快速搜索
 // @namespace    https://github.com/qxinGitHub/searchAV
-// @version      0.24.5
+// @version      0.24.6
 // @description  标记网页上的所有番号, 在相关网站快速方便的进行搜索
 // @author       iqxin
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAABLdJREFUWEftmG2IVGUUx3//O6MZapIftJTeKAqDiqiPGllZSdqHXsw3KmNnpm1LzYqgAleoMAJLw2xmdtsKqS3BkIy0QDSS6FNIkAgRilhUkPjGprtzTzx3d2fv3L0z986upB+6X+855/6e5znnf55zZWYTOY8fOUBJJ85HxoDtf8BRHM2odtAM0cF0fC6oMnicpoUjEjYKrqpr04DWxTjOsNQ8Chg3AWNiQHoR++RTZCybtYx/RgqbGtA6mej3sVziRaCZqj9h0O79xga109csaCpAK3KDiW7g+mY/ELL/WcZCFfipmRiJgFZinsFHwMXNBK5je1SwSHl2po3VENBKzDWjG3FRQkCXY8chsBvX0NY4LrFQeb5KA1kX0Dq5zip8DVweE8gHDkis5Qxb1cbJQRvbyASyLDHxPHBNLIRxQD53qpUjSZCxgE4+/BKfSDwSE+CU4FlydDSSEmsn61/KCok1wPhoHIP3vRwtSXIUD1jkbhNbYwIPy6FgMWWeE8wyY3emwFthGHuP+SY2x6TJUXnMVwt7G+3iMED3QSuzBXgw4tgjn6V6MgAfEtIOJpvPLgg0cZ887lALf9fYlGkzC8BrNNOgnMmTbw6wzFVuJ6K5V+9ILA1g/ZQ5pF5mqY3D9SCH72CRxSY+BLJD28RxwX0q8N2wXEoB6HysyEyDLyNHfXpAdj5PDVgp8aYIKjD8/KBe7gpXa7Vq0wLW2g2t3ViTKdCeGtAv8xnGwzU5BB9k8iwLLgdF5iGuGHzve1won2cQl2EcNo93PJ+e0O4fosB2V61+iS+AeTWxjY2ZAk+nByyxA7gnArg+k2elFbnaFFTd1CT9Cr2vFk6lxNuCFRHfnV6ee88OYH8BuTycdhYBt3t55qcGrJToEjxe4yC2eDkWBMnewWQqNX15UqBzMAPYL2MpcKzqn+HooOz4DU4nPWCRdonVEYdYfRsETtLBwG4jl9gY9gDXhmML2pTn3dSAFt9FegQLlGf7iGWmzKNmdNbIF5yS8YAKQc+PfYbr4CamWCYQandk4We3xjA3ejtOJdT9EuMgbonE3K8Kt6uVP1MDOsNKkdckXoo4+WZs8PKsCjf4GkDjR8FsFYZycODisU5iOeBFJOb1TIGXGxVc/GWhzAwzvgGmR5x7DVZ7OdbWQJaZis8EQgUR5F1/i3tV4oWY2eWgKsxWKwebBgx2scQawSvRVQPuLrhNWQp6gr/qHs0mplsmyLk5MTH6XLdSnvVJclX/wtrFOOvlU+D+OkF6gV2CbjJ8Tx99ZMnSxywTi4GZdSa+wXB7VGFBo/zrP4UGfxbMFYzHDsTNSSsd4ftEyOShqZNp5rMN49YRQiS5NYRMBAy22c3EleCWk4vJpyQA994NVa4YnEjXVPKAc13IVICDBFbmRrMgsW9LCeoK6lsZrfzOL/401rnO0QxkU4BV0E1M8bM8Jp9FiCuBSQMfdUDHMA66mcar0BWe3IJBqknIEQGmOdP6nSHQxljhjjvu/xwwJOB1IcPD1DkBTAG5VyeZo1X0nDPARpAmPs7kWJIo1KPJtbS+A/36DYmVQedxF44KD+kpfj0vAKvK4P7pjGW8cvxRe+MZaHVpV3wu7P4FjSUI5qMsu14AAAAASUVORK5CYII=
@@ -503,24 +503,24 @@
                 if(debug){console.log("存在不合适的父元素")}
             }else{
                 observer.disconnect();  // 关闭对 dom 的监听
-                // if(debug){console.log("开始判断正则")}
-                if(targetText.search(oRegExp)>-1){
-                    // console.log("普通番号");
-                    findAndReplaceDOMTextFun(mutation.target)
+                try {
+                    if(targetText.search(oRegExp)>-1){
+                        findAndReplaceDOMTextFun(mutation.target)
+                    }
+                    if(targetText.search(oRegExp2)>-1){
+                        findAndReplaceDOMTextFun2(mutation.target)
+                    }
+                    if(targetText.search(oRegExp_wuma)>-1){
+                        findAndReplaceDOMTextFun_Wuma(mutation.target)
+                    }
+                    if(targetText.search(oRegExp_wuma2)>-1){
+                        findAndReplaceDOMTextFun_Wuma2(mutation.target)
+                    }
+                } catch (e) {
+                    if (debug) console.warn("sav: mutation error", e);
+                } finally {
+                    observer.observe(observerTarget, observerConfig);   // 开启对 dom 的监听
                 }
-                if(targetText.search(oRegExp2)>-1){
-                    // console.log("连续番号");
-                    findAndReplaceDOMTextFun2(mutation.target)
-                }
-                if(targetText.search(oRegExp_wuma)>-1){
-                    // console.log("无码番号");
-                    findAndReplaceDOMTextFun_Wuma(mutation.target)
-                }
-                if(targetText.search(oRegExp_wuma2)>-1){
-                    // console.log("连续无码番号");
-                    findAndReplaceDOMTextFun_Wuma2(mutation.target)
-                }
-                observer.observe(observerTarget, observerConfig);   // 开启对 dom 的监听
             } 
         })
     }); 
@@ -539,24 +539,40 @@
 
     // 支持 Next.js 等 SPA 路由切换后自动重新匹配番号
     function handleSPARoute() {
-        setTimeout(findAVID, 300);
+        setTimeout(findAVID, 200);
+        setTimeout(findAVID, 600);
+        setTimeout(findAVID, 1200);
     }
     window.addEventListener("popstate", handleSPARoute);
-    const targetHistory = (typeof unsafeWindow !== 'undefined' && unsafeWindow.history) ? unsafeWindow.history : history;
-    if (targetHistory && targetHistory.pushState) {
-        const _origPush = targetHistory.pushState;
-        targetHistory.pushState = function(...args) {
-            const ret = _origPush.apply(this, args);
-            handleSPARoute();
-            return ret;
-        };
-        const _origReplace = targetHistory.replaceState;
-        targetHistory.replaceState = function(...args) {
-            const ret = _origReplace.apply(this, args);
-            handleSPARoute();
-            return ret;
-        };
+    try {
+        const targetHistory = (typeof unsafeWindow !== 'undefined' && unsafeWindow.history) ? unsafeWindow.history : history;
+        if (targetHistory && targetHistory.pushState) {
+            const _origPush = targetHistory.pushState;
+            targetHistory.pushState = function(...args) {
+                const ret = _origPush.apply(this, args);
+                handleSPARoute();
+                return ret;
+            };
+            const _origReplace = targetHistory.replaceState;
+            targetHistory.replaceState = function(...args) {
+                const ret = _origReplace.apply(this, args);
+                handleSPARoute();
+                return ret;
+            };
+        }
+    } catch (e) {
+        if (debug) console.warn("sav: hook history failed", e);
     }
+
+    // 针对 Next.js / React 客户端路由切换：轮询监测 URL 变化，确保点击链接或程序跳转都能捕获
+    let lastUrl = window.location.href;
+    setInterval(function() {
+        if (window.location.href !== lastUrl) {
+            lastUrl = window.location.href;
+            if (debug) console.log("sav: SPA URL 改变，重新匹配番号: " + lastUrl);
+            handleSPARoute();
+        }
+    }, 400);
 
     // 磁链
     // 如果设置中有qbit的网址和下载地址, 则认为启用了下载功能
@@ -580,11 +596,16 @@
         if(!allHTML) return;
         if(debug){console.time("正则查询用时");}
         observer.disconnect();  // 关闭对 dom 的监听
-        findAndReplaceDOMTextFun_Wuma2(allHTML);    //// 查找连续的 fc2 番号。 例: fc2-123456 567890
-        findAndReplaceDOMTextFun_Wuma(allHTML);  // 查找fc2、素人、无码等番号 (无菜单,点击后会跳转到javdb进行搜索)
-        findAndReplaceDOMTextFun2(allHTML);    // 省略字母, 连续数字的番号 例: abc-001、002、003
-        findAndReplaceDOMTextFun(allHTML);     // 查找普通番号  (与上面的顺序不能变,否则会导致 2函数 失效)
-        observer.observe(observerTarget, observerConfig);   // 开启对 dom 的监听
+        try {
+            findAndReplaceDOMTextFun_Wuma2(allHTML);    //// 查找连续的 fc2 番号。 例: fc2-123456 567890
+            findAndReplaceDOMTextFun_Wuma(allHTML);  // 查找fc2、素人、无码等番号 (无菜单,点击后会跳转到javdb进行搜索)
+            findAndReplaceDOMTextFun2(allHTML);    // 省略字母, 连续数字的番号 例: abc-001、002、003
+            findAndReplaceDOMTextFun(allHTML);     // 查找普通番号  (与上面的顺序不能变,否则会导致 2函数 失效)
+        } catch (e) {
+            if (debug) console.warn("sav: findAVID error", e);
+        } finally {
+            observer.observe(observerTarget, observerConfig);   // 开启对 dom 的监听
+        }
         if(debug) {console.timeEnd("正则查询用时"); console.log("本页面通过正则匹配的有: " + searchTimes + " . 实际的番号数量: " + avIDTimes);}
         if(!(setting.dontMagnetDiscern || setting.dontCopyMagnet )){    // 磁链
             findAndReplaceDOMTextFunMagnet();
@@ -2227,7 +2248,7 @@
             if(debug)console.log("checkParentClass: 父元素存在相关class, 已排除: ",startDom.className);
             return true;
         }
-        if(startDom.parentElement && "body" !== startDom.parentElement.nodeName){
+        if(startDom.parentElement && "BODY" !== startDom.parentElement.nodeName.toUpperCase()){
             return checkParentClass(startDom.parentElement)
         } else {
             return false
