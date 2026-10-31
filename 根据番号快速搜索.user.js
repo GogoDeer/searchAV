@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         根据番号快速搜索
 // @namespace    https://github.com/qxinGitHub/searchAV
-// @version      0.24.8
+// @version      0.24.9
 // @description  标记网页上的所有番号, 在相关网站快速方便的进行搜索
 // @author       iqxin
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAABLdJREFUWEftmG2IVGUUx3//O6MZapIftJTeKAqDiqiPGllZSdqHXsw3KmNnpm1LzYqgAleoMAJLw2xmdtsKqS3BkIy0QDSS6FNIkAgRilhUkPjGprtzTzx3d2fv3L0z986upB+6X+855/6e5znnf55zZWYTOY8fOUBJJ85HxoDtf8BRHM2odtAM0cF0fC6oMnicpoUjEjYKrqpr04DWxTjOsNQ8Chg3AWNiQHoR++RTZCybtYx/RgqbGtA6mej3sVziRaCZqj9h0O79xga109csaCpAK3KDiW7g+mY/ELL/WcZCFfipmRiJgFZinsFHwMXNBK5je1SwSHl2po3VENBKzDWjG3FRQkCXY8chsBvX0NY4LrFQeb5KA1kX0Dq5zip8DVweE8gHDkis5Qxb1cbJQRvbyASyLDHxPHBNLIRxQD53qpUjSZCxgE4+/BKfSDwSE+CU4FlydDSSEmsn61/KCok1wPhoHIP3vRwtSXIUD1jkbhNbYwIPy6FgMWWeE8wyY3emwFthGHuP+SY2x6TJUXnMVwt7G+3iMED3QSuzBXgw4tgjn6V6MgAfEtIOJpvPLgg0cZ887lALf9fYlGkzC8BrNNOgnMmTbw6wzFVuJ6K5V+9ILA1g/ZQ5pF5mqY3D9SCH72CRxSY+BLJD28RxwX0q8N2wXEoB6HysyEyDLyNHfXpAdj5PDVgp8aYIKjD8/KBe7gpXa7Vq0wLW2g2t3ViTKdCeGtAv8xnGwzU5BB9k8iwLLgdF5iGuGHzve1won2cQl2EcNo93PJ+e0O4fosB2V61+iS+AeTWxjY2ZAk+nByyxA7gnArg+k2elFbnaFFTd1CT9Cr2vFk6lxNuCFRHfnV6ee88OYH8BuTycdhYBt3t55qcGrJToEjxe4yC2eDkWBMnewWQqNX15UqBzMAPYL2MpcKzqn+HooOz4DU4nPWCRdonVEYdYfRsETtLBwG4jl9gY9gDXhmML2pTn3dSAFt9FegQLlGf7iGWmzKNmdNbIF5yS8YAKQc+PfYbr4CamWCYQandk4We3xjA3ejtOJdT9EuMgbonE3K8Kt6uVP1MDOsNKkdckXoo4+WZs8PKsCjf4GkDjR8FsFYZycODisU5iOeBFJOb1TIGXGxVc/GWhzAwzvgGmR5x7DVZ7OdbWQJaZis8EQgUR5F1/i3tV4oWY2eWgKsxWKwebBgx2scQawSvRVQPuLrhNWQp6gr/qHs0mplsmyLk5MTH6XLdSnvVJclX/wtrFOOvlU+D+OkF6gV2CbjJ8Tx99ZMnSxywTi4GZdSa+wXB7VGFBo/zrP4UGfxbMFYzHDsTNSSsd4ftEyOShqZNp5rMN49YRQiS5NYRMBAy22c3EleCWk4vJpyQA994NVa4YnEjXVPKAc13IVICDBFbmRrMgsW9LCeoK6lsZrfzOL/401rnO0QxkU4BV0E1M8bM8Jp9FiCuBSQMfdUDHMA66mcar0BWe3IJBqknIEQGmOdP6nSHQxljhjjvu/xwwJOB1IcPD1DkBTAG5VyeZo1X0nDPARpAmPs7kWJIo1KPJtbS+A/36DYmVQedxF44KD+kpfj0vAKvK4P7pjGW8cvxRe+MZaHVpV3wu7P4FjSUI5qMsu14AAAAASUVORK5CYII=
@@ -864,12 +864,12 @@
 
     /**
      * 格式化搜索URL
-     * 如果是 123av.com 的链接，将生成的 URL 整体转为小写
+     * 如果是 123av.com 或 jable.tv 的链接，将生成的 URL 整体转为规范小写
      */
     function formatSearchURL(searchURL, avID) {
         if (!searchURL) return "";
         const url = searchURL.replace("%s", avID || "");
-        return url.includes("123av") ? url.toLowerCase() : url;
+        return (url.includes("123av") || url.includes("jable.tv")) ? url.toLowerCase() : url;
     }
 
     // 创建搜索基本菜单(搜索按钮)
@@ -3079,14 +3079,43 @@
     }
 
     // ============================================================
-    // 📦 模块：IconButtonUtils
+    // 📦 模块：IconButtonUtils (v2 - 支持并发队列、CF验证防御、精准404/重定向过滤与缓存隔离)
     // ============================================================
     const IconButtonUtils = (() => {
 
-        const CACHE_KEY = "_external_link_cache";
-        const CACHE_TTL = 24 * 60 * 60 * 1000; // 24小时
-        const inflightChecks = new Map(); // 内存级去重：URL -> Promise<boolean>
+        const CACHE_KEY = "_external_link_cache_v2";
+        const CACHE_TTL = 24 * 60 * 60 * 1000; // 正常可信结果缓存 24 小时
+        const inflightChecks = new Map(); // 内存级去重：URL -> Promise<{ trusted: boolean, exists: boolean, isChallenge?: boolean, reason: string }>
 
+        // 自动清理旧版本可能被假阳性/假阴性污染的旧缓存
+        try {
+            if (GM_getValue("_external_link_cache")) {
+                GM_deleteValue("_external_link_cache");
+                console.info("[IconButton] 🔄 已自动清理旧版被污染的资源检测缓存 (_external_link_cache)");
+            }
+        } catch (e) {}
+
+        // --- 控制台彩色日志输出辅助函数 ---
+        const logPrefix = "%c[IconButton]%c";
+        const prefixStyle = "background: #6366f1; color: #fff; padding: 2px 5px; border-radius: 3px; font-weight: bold;";
+
+        function logInfo(msg, ...args) {
+            console.log(logPrefix + " " + msg, prefixStyle, "color: #3b82f6;", ...args);
+        }
+        function logSuccess(msg, ...args) {
+            console.log(logPrefix + " " + msg, prefixStyle, "color: #10b981; font-weight: bold;", ...args);
+        }
+        function logWarn(msg, ...args) {
+            console.warn(logPrefix + " " + msg, prefixStyle, "color: #f59e0b; font-weight: bold;", ...args);
+        }
+        function logError(msg, ...args) {
+            console.error(logPrefix + " " + msg, prefixStyle, "color: #ef4444; font-weight: bold;", ...args);
+        }
+        function logDebug(msg, ...args) {
+            console.log(logPrefix + " " + msg, prefixStyle, "color: #8b5cf6;", ...args);
+        }
+
+        // --- 缓存管理 ---
         function getCache(url) {
             const cache = GM_getValue(CACHE_KEY, {});
             const item = cache[url];
@@ -3100,13 +3129,50 @@
             let cache = GM_getValue(CACHE_KEY, {});
             const now = Date.now();
             const entries = Object.entries(cache);
-            if (entries.length > 300) {
-                // 保留最近的200条
+            if (entries.length > 500) {
+                // 保留最近的 300 条
                 const sorted = entries.sort((a, b) => b[1].time - a[1].time);
-                cache = Object.fromEntries(sorted.slice(0, 200));
+                cache = Object.fromEntries(sorted.slice(0, 300));
             }
             cache[url] = { val, time: now };
             GM_setValue(CACHE_KEY, cache);
+        }
+
+        function clearExternalCache() {
+            GM_deleteValue(CACHE_KEY);
+            GM_deleteValue("_external_link_cache");
+            logSuccess("✅ 资源有效性检测缓存已清空！");
+        }
+
+        // --- 异步并发队列（限制最大并发请求数，防止触发网站限流或封禁） ---
+        const MAX_CONCURRENCY = 3; // 最大同时发起的跨域请求数
+        let activeRequests = 0;
+        const requestQueue = [];
+
+        function enqueueTask(taskFn) {
+            return new Promise((resolve, reject) => {
+                requestQueue.push({ taskFn, resolve, reject });
+                scheduleNext();
+            });
+        }
+
+        function scheduleNext() {
+            if (activeRequests >= MAX_CONCURRENCY || requestQueue.length === 0) {
+                return;
+            }
+            activeRequests++;
+            const { taskFn, resolve, reject } = requestQueue.shift();
+
+            // 请求之间微小间隔 60ms，平滑突发流量
+            setTimeout(() => {
+                taskFn()
+                    .then(res => resolve(res))
+                    .catch(err => reject(err))
+                    .finally(() => {
+                        activeRequests--;
+                        scheduleNext();
+                    });
+            }, 60);
         }
 
         function sanitizeIcon(icon) {
@@ -3118,166 +3184,201 @@
             return str;
         }
 
-        /**
-         * 主方法：添加搜索列表的Icon按钮到番号旁
-         * @param {Array} list_all - 搜索列表配置数组, 来自 setting.list_all
-         * @param {string} avID - 番号ID
-         * @param {Element} targetElement - 目标元素，通常是番号按钮组容器
-         */
-        function addIconButtons(list_all, avID, targetElement) {
-            // 检查是否有list_all配置
-            if (!list_all?.length || !avID || !targetElement) return;
-
-            // 筛选出特殊标识为"IconButton"的配置项
-            let iconButtonConfigs = list_all.filter(config => {
-                return (
-                    Array.isArray(config) &&
-                    config.length >= 3 &&
-                    sanitizeIcon(config[2]).length > 0
-                );
-            });
-
-            // 为指定的番号元素添加IconButton按钮
-            iconButtonConfigs.forEach(config => {
-                const [siteName, searchURL, icon] = config;
-                const cleanIcon = sanitizeIcon(icon);
-                if (!cleanIcon) return;
-
-                // 生成搜索URL，替换%s占位符
-                const finalURL = formatSearchURL(searchURL, avID);
-                // 创建按钮元素
-                const buttonDiv = document.createElement("savdiv");
-                buttonDiv.classList.add("icon-button", "sav-icon-btn");
-                buttonDiv.innerHTML = cleanIcon;
-                buttonDiv.dataset.url = finalURL;
-                buttonDiv.dataset.avid = avID;
-
-                // 点击打开链接
-                buttonDiv.addEventListener("click", e => {
-                    GM_openInTab(finalURL, { active: true, insert: true, setParent: true });
-                    e.preventDefault();
-                });
-
-                // 插入到按钮组中
-                targetElement.appendChild(buttonDiv);
-
-                const isNyaa = finalURL.includes("nyaa");
-                const isJable = finalURL.includes("jable.tv");
-                const is123av = finalURL.includes("123av.com");
-
-                if (isNyaa || isJable || is123av) {
-                    const cached = getCache(finalURL);
-                    if (cached !== null) {
-                        // 高亮结果
-                        if (isNyaa) buttonDiv.classList.add(cached ? "has-seeders" : "no-seeders");
-                        else buttonDiv.classList.add(cached ? "has-video" : "no-video");
-                    } else {
-                        // 显示加载状态
-                        buttonDiv.classList.add("loading-status");
-                        // 使用 fetchStatus 去重：同一 URL 只发一次请求
-                        fetchStatus(finalURL, isNyaa, isJable).then(result => {
-                            buttonDiv.classList.remove("loading-status");
-                            if (isNyaa) buttonDiv.classList.add(result ? "has-seeders" : "no-seeders");
-                            else buttonDiv.classList.add(result ? "has-video" : "no-video");
-                        });
-                    }
-                }
-            });
-        }
-
-        // ============================================================
-        // 🔄 统一检查入口（内存去重 + 持久化缓存）
-        // 同一 URL 在同一页面生命周期内只发一次网络请求
-        // ============================================================
-        function fetchStatus(url, isNyaa, isJable) {
-            // 如果已经有同 URL 的请求在飞行中，直接复用
-            if (inflightChecks.has(url)) {
-                console.log(`[IconButton] Reusing inflight check: ${url}`);
-                return inflightChecks.get(url);
-            }
-
-            const label = isNyaa ? "Nyaa" : (isJable ? "Jable" : "123AV");
-            const promise = (isNyaa ? hasTorrent(url) : checkVideoExists(url, label))
-                .then(result => {
-                    setCache(url, result);
-                    inflightChecks.delete(url);
-                    return result;
-                })
-                .catch(err => {
-                    console.error(`[IconButton] fetchStatus failed for ${url}:`, err);
-                    inflightChecks.delete(url);
-                    return false;
-                });
-
-            inflightChecks.set(url, promise);
-            return promise;
-        }
-
-        // ============================================================
-        // 🎬 检查视频是否存在
-        // ============================================================
-        async function checkVideoExists(url, label = "Video") {
-            console.log(`[${label}] Checking: ${url}`);
-            try {
-                const res = await gmFetch(url, { method: "HEAD" });
-                const isNot404 = res.status !== 404;
-                const isRedirected = res.finalUrl !== url;
-                const exists = isNot404 || isRedirected;
-                console.log(`[${label}] status=${res.status}, finalUrl=${res.finalUrl}`);
-                console.log(`[${label}] isNot404=${isNot404}, isRedirected=${isRedirected}, exists=${exists}`);
-                console.log(`[${label}] ${exists ? "✅ Exists" : "❌ No video"}: ${url}`);
-                return exists;
-            } catch (err) {
-                console.error(`[${label}] checkVideoExists failed:`, err);
-                return false;
-            }
-        }
-
-        // ============================================================
-        // 💽 检查 nyaa 种子
-        // ============================================================
-        async function hasTorrent(url, minSeeders = 1, minSizeGiB = 2) {
-            console.log(`[Nyaa] Fetching: ${url}`);
-            try {
-                const res = await gmFetch(url);
-                console.log(`[Nyaa] status=${res.status}, finalUrl=${res.finalUrl}`);
-                if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-                const doc = new DOMParser().parseFromString(res.responseText, "text/html");
-                const allRows = doc.querySelectorAll("table.torrent-list tbody tr");
-                console.log(`[Nyaa] Total rows in table: ${allRows.length}`);
-                const torrents = extractFilteredTorrents(doc, minSeeders, minSizeGiB);
-                const has = torrents.length > 0;
-                console.log(`[Nyaa] Filtered torrents: ${torrents.length}/${allRows.length} (minSeeders>${minSeeders}, minSize>${minSizeGiB}GiB)`);
-                if (torrents.length > 0) {
-                    torrents.forEach((t, i) => console.log(`[Nyaa]   #${i+1}: seeders=${t.seeders}, size=${t.size}`));
-                }
-                console.log(`[Nyaa] ${has ? "✅ Found torrents" : "❌ No torrents"}: ${url}`);
-                return has;
-            } catch (err) {
-                console.error(`[Nyaa] hasTorrent failed:`, err);
-                return false;
-            }
-        }
-
-        // ============================================================
-        // 🌐 通用 GM_xmlhttpRequest 封装
-        // ============================================================
+        // --- 通用增强型 GM_xmlhttpRequest 请求封装 ---
         async function gmFetch(url, options = {}) {
             const method = options.method || "GET";
+            const timeout = options.timeout || 12000;
             return new Promise((resolve, reject) => {
                 GM_xmlhttpRequest({
                     method,
                     url,
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                        "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
+                        ...options.headers
+                    },
+                    timeout,
                     onload: res => {
                         resolve({
                             status: res.status,
-                            responseText: res.responseText,
-                            finalUrl: res.finalUrl || res.responseURL,
+                            responseText: res.responseText || "",
+                            finalUrl: res.finalUrl || res.responseURL || url
                         });
                     },
-                    onerror: err => reject(err),
+                    ontimeout: () => reject(new Error(`Timeout (${timeout}ms)`)),
+                    onerror: err => reject(err || new Error("Network Error"))
                 });
             });
+        }
+
+        // --- 识别 Cloudflare 真人验证盾特征 ---
+        function isCloudflareChallenge(status, text) {
+            if (status === 403 || status === 503) {
+                if (!text ||
+                    text.includes("Just a moment...") ||
+                    text.includes("cf-mitigated") ||
+                    text.includes("challenges.cloudflare.com") ||
+                    text.includes("Attention Required! | Cloudflare") ||
+                    text.includes("Cloudflare Ray ID") ||
+                    text.includes("Checking your browser")) {
+                    return true;
+                }
+            }
+            if (text && text.includes("Just a moment...") && text.includes("cloudflare")) {
+                return true;
+            }
+            return false;
+        }
+
+        // ============================================================
+        // 🎬 Jable.tv 检测逻辑
+        // ============================================================
+        async function checkJableVideo(url, avID) {
+            const normalizedUrl = url.toLowerCase();
+            logInfo(`[Jable] 🔍 检查: ${normalizedUrl} (番号: ${avID})`);
+            try {
+                // 使用 GET 请求以获取页面内容（HEAD 请求容易被 CF 403，且无法区分 404.php 内容）
+                const res = await gmFetch(normalizedUrl, { method: "GET" });
+
+                // 1. 检查是否触发 Cloudflare 真人验证
+                if (isCloudflareChallenge(res.status, res.responseText)) {
+                    logWarn(`[Jable] ⚠️ 触发 Cloudflare 真人安全验证 (Status: ${res.status})！URL: ${normalizedUrl}\n👉 请点击该按钮手动打开 Jable 页面通过人机验证后再试。`);
+                    return { trusted: false, exists: false, isChallenge: true, reason: "Cloudflare真人安全验证" };
+                }
+
+                // 2. 检查速率限制
+                if (res.status === 429) {
+                    logWarn(`[Jable] ⚠️ 触发 429 速率限制，暂不缓存: ${normalizedUrl}`);
+                    return { trusted: false, exists: false, reason: "429 Rate Limited" };
+                }
+
+                // 3. 检查 404 与 重定向到 404.php / 首页
+                const finalUrlLower = (res.finalUrl || "").toLowerCase();
+                const isRedirectedTo404 = finalUrlLower.includes("/404") || finalUrlLower === "https://jable.tv/" || finalUrlLower === "https://jable.tv";
+                const is404Content = res.responseText.includes("404 Not Found") || res.responseText.includes("<title>404");
+
+                if (res.status === 404 || isRedirectedTo404 || is404Content) {
+                    logDebug(`[Jable] ❌ 视频不存在 (404/重定向到404页面): ${normalizedUrl}`);
+                    return { trusted: true, exists: false, reason: "404 Not Found" };
+                }
+
+                // 4. 正常返回 200 且保留在视频路径
+                if (res.status === 200 && finalUrlLower.includes("/videos/")) {
+                    logSuccess(`[Jable] ✅ 找到视频: ${normalizedUrl}`);
+                    return { trusted: true, exists: true, reason: "Video exists" };
+                }
+
+                logWarn(`[Jable] ❓ 未知响应状态 (Status: ${res.status}, finalUrl: ${res.finalUrl}): ${normalizedUrl}`);
+                return { trusted: false, exists: false, reason: `Status ${res.status}` };
+            } catch (err) {
+                logWarn(`[Jable] ⚠️ 网络请求异常: ${err.message || err} (${normalizedUrl})`);
+                return { trusted: false, exists: false, reason: err.message || "Network Error" };
+            }
+        }
+
+        // ============================================================
+        // 🎞️ 123AV 检测逻辑
+        // ============================================================
+        async function check123avVideo(url, avID) {
+            const normalizedUrl = url.toLowerCase();
+            logInfo(`[123AV] 🔍 检查: ${normalizedUrl} (番号: ${avID})`);
+            try {
+                // 优先 HEAD 请求快速检测
+                const res = await gmFetch(normalizedUrl, { method: "HEAD" });
+
+                if (isCloudflareChallenge(res.status, res.responseText)) {
+                    logWarn(`[123AV] ⚠️ 触发安全验证 (Status: ${res.status}): ${normalizedUrl}`);
+                    return { trusted: false, exists: false, isChallenge: true, reason: "Cloudflare真人安全验证" };
+                }
+
+                if (res.status === 429) {
+                    logWarn(`[123AV] ⚠️ 触发 429 速率限制: ${normalizedUrl}`);
+                    return { trusted: false, exists: false, reason: "429 Rate Limited" };
+                }
+
+                const finalUrlLower = (res.finalUrl || "").toLowerCase();
+                const isRedirectedTo404 = finalUrlLower.includes("/404") || finalUrlLower === "https://123av.com/" || finalUrlLower === "https://123av.com";
+
+                if (res.status === 404 || isRedirectedTo404) {
+                    logDebug(`[123AV] ❌ 视频不存在 (404): ${normalizedUrl}`);
+                    return { trusted: true, exists: false, reason: "404 Not Found" };
+                }
+
+                if (res.status === 200) {
+                    logSuccess(`[123AV] ✅ 找到视频: ${normalizedUrl}`);
+                    return { trusted: true, exists: true, reason: "Video exists" };
+                }
+
+                // 如果 HEAD 状态异常，使用 GET 请求核实
+                const getRes = await gmFetch(normalizedUrl, { method: "GET" });
+                const isGet404 = getRes.status === 404 ||
+                                 (getRes.finalUrl && getRes.finalUrl.includes("/404")) ||
+                                 getRes.responseText.includes("404 — 123AV") ||
+                                 getRes.responseText.includes("404 Not Found");
+                if (isGet404) {
+                    logDebug(`[123AV] ❌ 视频不存在 (GET 404): ${normalizedUrl}`);
+                    return { trusted: true, exists: false, reason: "404 Not Found" };
+                }
+                if (getRes.status === 200) {
+                    logSuccess(`[123AV] ✅ 找到视频: ${normalizedUrl}`);
+                    return { trusted: true, exists: true, reason: "Video exists" };
+                }
+
+                return { trusted: false, exists: false, reason: `Status ${res.status}` };
+            } catch (err) {
+                logWarn(`[123AV] ⚠️ 网络请求异常: ${err.message || err} (${normalizedUrl})`);
+                return { trusted: false, exists: false, reason: err.message || "Network Error" };
+            }
+        }
+
+        // ============================================================
+        // 🌱 Nyaa / Sukebei 检测逻辑
+        // ============================================================
+        async function checkNyaaTorrent(url, avID, minSeeders = 1, minSizeGiB = 0.5) {
+            logInfo(`[Nyaa] 🔍 检索种子: ${url} (番号: ${avID})`);
+            try {
+                const res = await gmFetch(url, { method: "GET" });
+
+                if (isCloudflareChallenge(res.status, res.responseText)) {
+                    logWarn(`[Nyaa] ⚠️ 触发安全验证 / Cloudflare 拦截 (Status: ${res.status}): ${url}`);
+                    return { trusted: false, exists: false, isChallenge: true, reason: "Cloudflare真人安全验证" };
+                }
+
+                if (res.status === 429) {
+                    logWarn(`[Nyaa] ⚠️ 触发 429 速率限制: ${url}`);
+                    return { trusted: false, exists: false, reason: "429 Rate Limited" };
+                }
+
+                if (res.status !== 200) {
+                    logWarn(`[Nyaa] ⚠️ 请求异常 HTTP ${res.status}: ${url}`);
+                    return { trusted: false, exists: false, reason: `HTTP ${res.status}` };
+                }
+
+                const doc = new DOMParser().parseFromString(res.responseText, "text/html");
+                const allRows = doc.querySelectorAll("table.torrent-list tbody tr");
+
+                if (allRows.length === 0) {
+                    logDebug(`[Nyaa] ❌ 未搜索到任何种子 (0 个结果): ${url}`);
+                    return { trusted: true, exists: false, reason: "0 torrents found" };
+                }
+
+                const torrents = extractFilteredTorrents(doc, minSeeders, minSizeGiB);
+                const has = torrents.length > 0;
+                if (has) {
+                    logSuccess(`[Nyaa] ✅ 找到有效种子 (${torrents.length}/${allRows.length}个达标，做种>=${minSeeders}，大小>=${minSizeGiB}GiB): ${url}`);
+                } else {
+                    logDebug(`[Nyaa] ❌ 找到 ${allRows.length} 个结果但均无可用做种 (做种需>=${minSeeders} 且 大小需>=${minSizeGiB}GiB): ${url}`);
+                }
+                return {
+                    trusted: true,
+                    exists: has,
+                    reason: has ? `Found ${torrents.length} active torrents` : "No active seeders or size too small"
+                };
+            } catch (err) {
+                logWarn(`[Nyaa] ⚠️ 检索失败: ${err.message || err} (${url})`);
+                return { trusted: false, exists: false, reason: err.message || "Network Error" };
+            }
         }
 
         function extractFilteredTorrents(doc, minSeeders, minSizeGiB) {
@@ -3287,20 +3388,21 @@
                     const nameText = row.querySelector("td:nth-child(2) a:last-of-type")?.textContent.trim() ?? "";
                     const sizeText = row.querySelector("td:nth-child(4)")?.textContent.trim() ?? "";
                     const seedersText = row.querySelector("td:nth-child(6)")?.textContent.trim() ?? "";
-                    const torrentLink = row.querySelector("td:nth-child(3) a[href$='.torrent']")?.href;
+                    // 支持 .torrent 下载链接或磁力链接
+                    const torrentLink = row.querySelector("td:nth-child(3) a[href$='.torrent']")?.href ||
+                                        row.querySelector("td:nth-child(3) a[href^='magnet:']")?.href;
                     if (!torrentLink) {
-                        console.log(`[Nyaa]   row#${idx}: SKIP (no torrent link)`);
                         return null;
                     }
 
                     const seeders = parseInt(seedersText, 10) || 0;
                     const sizeGiB = parseSizeToGiB(sizeText);
-                    const passSeeder = seeders > minSeeders;
-                    const passSize = sizeGiB > minSizeGiB;
+                    // 修复：seeders >= minSeeders（允许只有1个做种者），sizeGiB >= minSizeGiB
+                    const passSeeder = seeders >= minSeeders;
+                    const passSize = sizeGiB >= minSizeGiB;
                     const pass = passSeeder && passSize;
-                    console.log(`[Nyaa]   row#${idx}: name="${nameText.substring(0, 60)}" seeders=${seeders}(>${minSeeders}?${passSeeder}) size=${sizeText}/${sizeGiB.toFixed(2)}GiB(>${minSizeGiB}?${passSize}) => ${pass ? "✅PASS" : "❌FILTERED"}`);
                     return pass
-                        ? { torrent: torrentLink, seeders, size: sizeText }
+                        ? { torrent: torrentLink, seeders, size: sizeText, name: nameText }
                         : null;
                 })
                 .filter(Boolean);
@@ -3315,7 +3417,125 @@
             return size * (factor[unit] || 0);
         }
 
-        return { addIconButtons };
+        // ============================================================
+        // 🔄 统一状态调度入口（并发队列 + 飞行去重 + 可信结果缓存）
+        // ============================================================
+        function fetchStatus(url, isNyaa, isJable, avID) {
+            if (inflightChecks.has(url)) {
+                return inflightChecks.get(url);
+            }
+
+            const promise = enqueueTask(async () => {
+                if (isNyaa) {
+                    return await checkNyaaTorrent(url, avID);
+                } else if (isJable) {
+                    return await checkJableVideo(url, avID);
+                } else {
+                    return await check123avVideo(url, avID);
+                }
+            }).then(checkResult => {
+                // 仅当结果可信（trusted: true，即明确 200 且未被拦截、或明确 404）才写入持久缓存！
+                // 真人安全验证、429 限流、网络超时等临时状态绝不持久化！
+                if (checkResult && checkResult.trusted) {
+                    setCache(url, checkResult.exists);
+                } else {
+                    logDebug(`[Cache] 结果为临时状态/被拦截 (${checkResult?.reason || "unknown"})，不写入持久缓存: ${url}`);
+                }
+                inflightChecks.delete(url);
+                return checkResult;
+            }).catch(err => {
+                logWarn(`[IconButton] 检查异常: ${err.message || err} (${url})`);
+                inflightChecks.delete(url);
+                return { trusted: false, exists: false, reason: err.message || "Network Error" };
+            });
+
+            inflightChecks.set(url, promise);
+            return promise;
+        }
+
+        /**
+         * 主方法：添加搜索列表的Icon按钮到番号旁
+         * @param {Array} list_all - 搜索列表配置数组, 来自 setting.list_all
+         * @param {string} avID - 番号ID
+         * @param {Element} targetElement - 目标元素，通常是番号按钮组容器
+         */
+        function addIconButtons(list_all, avID, targetElement) {
+            if (!list_all?.length || !avID || !targetElement) return;
+
+            let iconButtonConfigs = list_all.filter(config => {
+                return (
+                    Array.isArray(config) &&
+                    config.length >= 3 &&
+                    sanitizeIcon(config[2]).length > 0
+                );
+            });
+
+            iconButtonConfigs.forEach(config => {
+                const [siteName, searchURL, icon] = config;
+                const cleanIcon = sanitizeIcon(icon);
+                if (!cleanIcon) return;
+
+                const finalURL = formatSearchURL(searchURL, avID);
+                const buttonDiv = document.createElement("savdiv");
+                buttonDiv.classList.add("icon-button", "sav-icon-btn");
+                buttonDiv.innerHTML = cleanIcon;
+                buttonDiv.dataset.url = finalURL;
+                buttonDiv.dataset.avid = avID;
+
+                buttonDiv.addEventListener("click", e => {
+                    GM_openInTab(finalURL, { active: true, insert: true, setParent: true });
+                    e.preventDefault();
+                });
+
+                targetElement.appendChild(buttonDiv);
+
+                const isNyaa = finalURL.includes("nyaa");
+                const isJable = finalURL.includes("jable.tv");
+                const is123av = finalURL.includes("123av.com");
+
+                if (isNyaa || isJable || is123av) {
+                    const cached = getCache(finalURL);
+                    if (cached !== null) {
+                        // 命中有效缓存
+                        if (isNyaa) {
+                            buttonDiv.classList.add(cached ? "has-seeders" : "no-seeders");
+                            buttonDiv.title = cached ? "已检测到可用种子资源 (来自缓存)" : "未检测到可用种子资源 (来自缓存)";
+                        } else {
+                            buttonDiv.classList.add(cached ? "has-video" : "no-video");
+                            buttonDiv.title = cached ? "已检测到在线视频 (来自缓存)" : "未检测到在线视频 (来自缓存)";
+                        }
+                    } else {
+                        // 显示加载呼吸动画
+                        buttonDiv.classList.add("loading-status");
+                        buttonDiv.title = "正在检测资源有效性...";
+
+                        fetchStatus(finalURL, isNyaa, isJable, avID).then(checkResult => {
+                            buttonDiv.classList.remove("loading-status");
+                            const exists = checkResult ? checkResult.exists : false;
+                            const isChallenge = checkResult?.isChallenge;
+
+                            if (isNyaa) {
+                                buttonDiv.classList.add(exists ? "has-seeders" : "no-seeders");
+                                if (isChallenge) {
+                                    buttonDiv.title = "⚠️ 触发真人安全验证，请点击打开页面完成人机验证";
+                                } else {
+                                    buttonDiv.title = exists ? "已检测到可用种子，点击打开" : "未检测到有效做种种子";
+                                }
+                            } else {
+                                buttonDiv.classList.add(exists ? "has-video" : "no-video");
+                                if (isChallenge) {
+                                    buttonDiv.title = "⚠️ 触发真人安全验证，请点击打开页面完成人机验证";
+                                } else {
+                                    buttonDiv.title = exists ? "已检测到在线播放资源，点击播放" : "未检测到在线视频";
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+        }
+
+        return { addIconButtons, clearExternalCache };
     })();
 
     // 调用qbit下载
@@ -3383,6 +3603,7 @@
         "<button id='savDebug' >供测试使用</button> &nbsp;&nbsp;&nbsp;" +
         "<button id='savClearSetting' >清空设置</button> &nbsp;&nbsp;&nbsp;" +
         "<button id='savHistory' >清空浏览历史</button> &nbsp;&nbsp;&nbsp;" +
+        "<button id='savClearExternalCache' >清空资源缓存</button> &nbsp;&nbsp;&nbsp;" +
         "<button id='savEditBoxCloase' >关闭</button> &nbsp;&nbsp;&nbsp;" +
         "<button id='savEditBoxSave' >保存</button>" +
         "";
@@ -3390,6 +3611,10 @@
         editbox.querySelector("#savDebug").addEventListener("click",savDebug)
         editbox.querySelector("#savClearSetting").addEventListener("click",clearSetting)
         editbox.querySelector("#savHistory").addEventListener("click",clearHistory)
+        editbox.querySelector("#savClearExternalCache").addEventListener("click",function(){
+            IconButtonUtils.clearExternalCache();
+            alert("资源有效性检测缓存已清空！刷新页面将重新实时检测。");
+        })
         editbox.querySelector("#savEditBoxCloase").addEventListener("click",savBoxClose)
         editbox.querySelector("#savEditBoxSave").addEventListener("click",savBoxSave)
         document.body.appendChild(editbox);
@@ -3811,16 +4036,20 @@
                 100% { opacity: 0.4; }
             }
             .has-seeders {
-               color: #459df5;
+               filter: none;
+               opacity: 1;
             }
             .no-seeders {
                filter: grayscale(100%);
+               opacity: 0.5;
             }
             .has-video {
-              color: #459df5;
+               filter: none;
+               opacity: 1;
             }
             .no-video {
-                filter: grayscale(100%);
+               filter: grayscale(100%);
+               opacity: 0.5;
             }
             /* CSS for sav-btn-group and icon-button end */
 
