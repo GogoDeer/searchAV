@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         根据番号快速搜索
 // @namespace    https://github.com/qxinGitHub/searchAV
-// @version      0.24.7
+// @version      0.24.8
 // @description  标记网页上的所有番号, 在相关网站快速方便的进行搜索
 // @author       iqxin
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAABLdJREFUWEftmG2IVGUUx3//O6MZapIftJTeKAqDiqiPGllZSdqHXsw3KmNnpm1LzYqgAleoMAJLw2xmdtsKqS3BkIy0QDSS6FNIkAgRilhUkPjGprtzTzx3d2fv3L0z986upB+6X+855/6e5znnf55zZWYTOY8fOUBJJ85HxoDtf8BRHM2odtAM0cF0fC6oMnicpoUjEjYKrqpr04DWxTjOsNQ8Chg3AWNiQHoR++RTZCybtYx/RgqbGtA6mej3sVziRaCZqj9h0O79xga109csaCpAK3KDiW7g+mY/ELL/WcZCFfipmRiJgFZinsFHwMXNBK5je1SwSHl2po3VENBKzDWjG3FRQkCXY8chsBvX0NY4LrFQeb5KA1kX0Dq5zip8DVweE8gHDkis5Qxb1cbJQRvbyASyLDHxPHBNLIRxQD53qpUjSZCxgE4+/BKfSDwSE+CU4FlydDSSEmsn61/KCok1wPhoHIP3vRwtSXIUD1jkbhNbYwIPy6FgMWWeE8wyY3emwFthGHuP+SY2x6TJUXnMVwt7G+3iMED3QSuzBXgw4tgjn6V6MgAfEtIOJpvPLgg0cZ887lALf9fYlGkzC8BrNNOgnMmTbw6wzFVuJ6K5V+9ILA1g/ZQ5pF5mqY3D9SCH72CRxSY+BLJD28RxwX0q8N2wXEoB6HysyEyDLyNHfXpAdj5PDVgp8aYIKjD8/KBe7gpXa7Vq0wLW2g2t3ViTKdCeGtAv8xnGwzU5BB9k8iwLLgdF5iGuGHzve1won2cQl2EcNo93PJ+e0O4fosB2V61+iS+AeTWxjY2ZAk+nByyxA7gnArg+k2elFbnaFFTd1CT9Cr2vFk6lxNuCFRHfnV6ee88OYH8BuTycdhYBt3t55qcGrJToEjxe4yC2eDkWBMnewWQqNX15UqBzMAPYL2MpcKzqn+HooOz4DU4nPWCRdonVEYdYfRsETtLBwG4jl9gY9gDXhmML2pTn3dSAFt9FegQLlGf7iGWmzKNmdNbIF5yS8YAKQc+PfYbr4CamWCYQandk4We3xjA3ejtOJdT9EuMgbonE3K8Kt6uVP1MDOsNKkdckXoo4+WZs8PKsCjf4GkDjR8FsFYZycODisU5iOeBFJOb1TIGXGxVc/GWhzAwzvgGmR5x7DVZ7OdbWQJaZis8EQgUR5F1/i3tV4oWY2eWgKsxWKwebBgx2scQawSvRVQPuLrhNWQp6gr/qHs0mplsmyLk5MTH6XLdSnvVJclX/wtrFOOvlU+D+OkF6gV2CbjJ8Tx99ZMnSxywTi4GZdSa+wXB7VGFBo/zrP4UGfxbMFYzHDsTNSSsd4ftEyOShqZNp5rMN49YRQiS5NYRMBAy22c3EleCWk4vJpyQA994NVa4YnEjXVPKAc13IVICDBFbmRrMgsW9LCeoK6lsZrfzOL/401rnO0QxkU4BV0E1M8bM8Jp9FiCuBSQMfdUDHMA66mcar0BWe3IJBqknIEQGmOdP6nSHQxljhjjvu/xwwJOB1IcPD1DkBTAG5VyeZo1X0nDPARpAmPs7kWJIo1KPJtbS+A/36DYmVQedxF44KD+kpfj0vAKvK4P7pjGW8cvxRe+MZaHVpV3wu7P4FjSUI5qMsu14AAAAASUVORK5CYII=
@@ -843,14 +843,18 @@
             odiv.innerHTML = (setting.searchButtonIcon ? setting.searchButtonIcon : "✈").trim();
             var divWrap = document.createElement("savdiv");
             divWrap.innerHTML = otext;
-            divWrap.appendChild(odiv);
+
+            const btnGroup = document.createElement("savdiv");
+            btnGroup.className = "sav-btn-group";
+            btnGroup.appendChild(odiv);
 
             // 添加Icon Button按钮
             const avID = odiv.dataset.av;
             if (avID) {
-                IconButtonUtils.addIconButtons(setting.list_all, avID, divWrap);
+                IconButtonUtils.addIconButtons(setting.list_all, avID, btnGroup);
             }
 
+            divWrap.appendChild(btnGroup);
             return divWrap;
         }else{
             odiv.innerHTML = otext;
@@ -3105,11 +3109,20 @@
             GM_setValue(CACHE_KEY, cache);
         }
 
+        function sanitizeIcon(icon) {
+            if (!icon) return '';
+            let str = (icon || '').replace(/&nbsp;/gi, '').trim();
+            if (!str.includes('<')) {
+                str = str.replace(/[\s\u00a0\u3000]+/g, '');
+            }
+            return str;
+        }
+
         /**
          * 主方法：添加搜索列表的Icon按钮到番号旁
          * @param {Array} list_all - 搜索列表配置数组, 来自 setting.list_all
          * @param {string} avID - 番号ID
-         * @param {Element} targetElement - 目标元素，通常是番号所在的父DOM节点
+         * @param {Element} targetElement - 目标元素，通常是番号按钮组容器
          */
         function addIconButtons(list_all, avID, targetElement) {
             // 检查是否有list_all配置
@@ -3120,19 +3133,22 @@
                 return (
                     Array.isArray(config) &&
                     config.length >= 3 &&
-                    config[2].trim().length > 0
+                    sanitizeIcon(config[2]).length > 0
                 );
             });
 
             // 为指定的番号元素添加IconButton按钮
             iconButtonConfigs.forEach(config => {
                 const [siteName, searchURL, icon] = config;
+                const cleanIcon = sanitizeIcon(icon);
+                if (!cleanIcon) return;
+
                 // 生成搜索URL，替换%s占位符
                 const finalURL = formatSearchURL(searchURL, avID);
                 // 创建按钮元素
                 const buttonDiv = document.createElement("savdiv");
-                buttonDiv.classList.add("icon-button");
-                buttonDiv.innerHTML = icon ? icon.trim() : "";
+                buttonDiv.classList.add("icon-button", "sav-icon-btn");
+                buttonDiv.innerHTML = cleanIcon;
                 buttonDiv.dataset.url = finalURL;
                 buttonDiv.dataset.avid = avID;
 
@@ -3142,7 +3158,7 @@
                     e.preventDefault();
                 });
 
-                // 插入到番号后面
+                // 插入到按钮组中
                 targetElement.appendChild(buttonDiv);
 
                 const isNyaa = finalURL.includes("nyaa");
@@ -3731,12 +3747,48 @@
                 color:#333;
             }
 
-            /* CSS for icon-button start */
-            .icon-button{
+            /* CSS for sav-btn-group and icon-button start */
+            .sav-btn-group {
+                display: inline-flex !important;
+                align-items: center !important;
+                vertical-align: middle !important;
+                gap: 3px !important;
+                margin: 0 4px !important;
+                line-height: 1 !important;
+            }
+            .sav-btn-group savdiv {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                line-height: 1 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .sav-btn-group .sav-id {
                 cursor: pointer;
-                display: inline-block;
-                margin-left: 2px;
-                margin-right: 1px;
+                font-size: 1em;
+                line-height: 1;
+            }
+            .sav-btn-group .jellyfin_openPage {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                line-height: 1 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .sav-btn-group .jellyfin_openPage svg {
+                cursor: pointer;
+                width: 1em;
+                height: 1em;
+                vertical-align: middle;
+            }
+            .icon-button {
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0;
                 padding: 0 1px;
                 color: white;
                 font-size: 14px;
@@ -3744,7 +3796,7 @@
                 vertical-align: middle;
                 transition: 0.2s;
             }
-            .icon-button:hover{
+            .icon-button:hover {
                 background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
                 transform: translateY(-1px);
                 border-radius: 3px;
@@ -3758,20 +3810,19 @@
                 50% { opacity: 1; }
                 100% { opacity: 0.4; }
             }
-            .has-seeders{
-               color:#459df5
+            .has-seeders {
+               color: #459df5;
             }
-            .no-seeders{
+            .no-seeders {
                filter: grayscale(100%);
             }
-            .has-video{
-              color:#459df5
+            .has-video {
+              color: #459df5;
             }
-            .no-video{
+            .no-video {
                 filter: grayscale(100%);
             }
-
-            /* CSS for icon-button end */
+            /* CSS for sav-btn-group and icon-button end */
 
             avspan svg {
                 height: 14px;
