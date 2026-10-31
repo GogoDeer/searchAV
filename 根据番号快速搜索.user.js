@@ -494,7 +494,8 @@
         // console.log("观察者数量");
         // console.log(mutations.length);
         mutations.forEach(function(mutation) {
-            if(mutation.target.innerText?.length<5){
+            const targetText = mutation.target.innerText || mutation.target.textContent || '';
+            if(targetText.length<5){
                 // console.log(mutation.target.innerText);
                 if(debug)console.log("内容为空");
             }
@@ -503,19 +504,19 @@
             }else{
                 observer.disconnect();  // 关闭对 dom 的监听
                 // if(debug){console.log("开始判断正则")}
-                if(mutation.target.innerText?.search(oRegExp)>-1){
+                if(targetText.search(oRegExp)>-1){
                     // console.log("普通番号");
                     findAndReplaceDOMTextFun(mutation.target)
                 }
-                if(mutation.target.innerText.search(oRegExp2)>-1){
+                if(targetText.search(oRegExp2)>-1){
                     // console.log("连续番号");
                     findAndReplaceDOMTextFun2(mutation.target)
                 }
-                if(mutation.target.innerText.search(oRegExp_wuma)>-1){
+                if(targetText.search(oRegExp_wuma)>-1){
                     // console.log("无码番号");
                     findAndReplaceDOMTextFun_Wuma(mutation.target)
                 }
-                if(mutation.target.innerText.search(oRegExp_wuma2)>-1){
+                if(targetText.search(oRegExp_wuma2)>-1){
                     // console.log("连续无码番号");
                     findAndReplaceDOMTextFun_Wuma2(mutation.target)
                 }
@@ -536,6 +537,27 @@
     // 延时执行, 解决javbus论坛通过搜索进入的帖子无发弹出工具栏的问题
     setTimeout(findAVID,300);
 
+    // 支持 Next.js 等 SPA 路由切换后自动重新匹配番号
+    function handleSPARoute() {
+        setTimeout(findAVID, 300);
+    }
+    window.addEventListener("popstate", handleSPARoute);
+    const targetHistory = (typeof unsafeWindow !== 'undefined' && unsafeWindow.history) ? unsafeWindow.history : history;
+    if (targetHistory && targetHistory.pushState) {
+        const _origPush = targetHistory.pushState;
+        targetHistory.pushState = function(...args) {
+            const ret = _origPush.apply(this, args);
+            handleSPARoute();
+            return ret;
+        };
+        const _origReplace = targetHistory.replaceState;
+        targetHistory.replaceState = function(...args) {
+            const ret = _origReplace.apply(this, args);
+            handleSPARoute();
+            return ret;
+        };
+    }
+
     // 磁链
     // 如果设置中有qbit的网址和下载地址, 则认为启用了下载功能
     if(!(setting.dontMagnetDiscern || setting.dontCopyMagnet )&& setting.qBitHost && setting.qBitDownload){
@@ -554,6 +576,8 @@
 
     // 
     function findAVID(){
+        allHTML = document.querySelector("body");
+        if(!allHTML) return;
         if(debug){console.time("正则查询用时");}
         observer.disconnect();  // 关闭对 dom 的监听
         findAndReplaceDOMTextFun_Wuma2(allHTML);    //// 查找连续的 fc2 番号。 例: fc2-123456 567890
@@ -2196,7 +2220,10 @@
 
     // 动态添加的元素, 检查所有父元素的class是否是排除项
     function checkParentClass(startDom){
-        if(startDom.classList && startDom.classList.length && startDom.className.match(window.qxin.RE_Exclude_className)){
+        const className = typeof startDom.className === 'string'
+            ? startDom.className
+            : (startDom.className && typeof startDom.className.baseVal === 'string' ? startDom.className.baseVal : '');
+        if(startDom.classList && startDom.classList.length && className && className.match(window.qxin.RE_Exclude_className)){
             if(debug)console.log("checkParentClass: 父元素存在相关class, 已排除: ",startDom.className);
             return true;
         }
