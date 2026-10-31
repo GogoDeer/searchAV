@@ -80,6 +80,11 @@ The main userscript is structured as an IIFE executed at `document-idle` via `@r
 ## Code conventions & agent guidelines
 
 - **Upstream Merge Compatibility**: When implementing new features or bug fixes, always encapsulate logic into self-contained helper modules or functions (such as `IconButtonUtils`) within `根据番号快速搜索.user.js`. Keep call sites in legacy routines (`displayMode`, `findAVID`) minimal to avoid merge conflicts when rebasing onto `upstream/main`.
+- **External Resource Checking & Tri-state Modeling**: When probing external websites (e.g. video streams, torrents):
+  - **Tri-state Classification**: Never model results as a crude binary boolean. Differentiate between *Positive*, *Negative (404/empty)*, and *Transient / Intercepted (Cloudflare 403/503 challenge, HTTP 429 rate limit, network timeout)*.
+  - **UI State Invariant**: Transient or challenge states MUST render warning cues (`sav-warn-*`) and explanatory guidance, NEVER misleading false-negative disabled/grayscale styles.
+  - **Cache Purity**: Only cryptographically or semantically trusted results can be cached with long TTL. Never persist transient errors or anti-bot challenge states into persistent storage.
+- **Scope Evaluation Policy**: Distinguish between uncontrolled scope creep and high-value developer/user convenience extensions (such as cache-clearing buttons in settings or synchronizing local-loader configurations). Valuable ergonomics that aid operability should be preserved and welcomed rather than mechanically reverted.
 - **CSS Scoping**: All custom CSS classes injected into host pages MUST carry the `sav-` prefix (e.g., `.sav-btn-group`, `.sav-icon-btn`, `.sav-has-video`) or be strictly scoped within `.sav-btn-group` to prevent style leaks into host websites.
 - **Language**: User communications, changelog entries (`更新日志.md`), and in-script comments must be in Simplified Chinese (简体中文).
 - **Naming Conventions**: Match existing codebase conventions — pinyin-style or descriptive camelCase (e.g., `oRegExp`, `displayMode`, `avInfo`, `savBoxEdit`).
