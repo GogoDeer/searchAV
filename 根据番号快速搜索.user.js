@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         根据番号快速搜索
 // @namespace    https://github.com/qxinGitHub/searchAV
-// @version      0.24.6
+// @version      0.24.7
 // @description  标记网页上的所有番号, 在相关网站快速方便的进行搜索
 // @author       iqxin
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAABLdJREFUWEftmG2IVGUUx3//O6MZapIftJTeKAqDiqiPGllZSdqHXsw3KmNnpm1LzYqgAleoMAJLw2xmdtsKqS3BkIy0QDSS6FNIkAgRilhUkPjGprtzTzx3d2fv3L0z986upB+6X+855/6e5znnf55zZWYTOY8fOUBJJ85HxoDtf8BRHM2odtAM0cF0fC6oMnicpoUjEjYKrqpr04DWxTjOsNQ8Chg3AWNiQHoR++RTZCybtYx/RgqbGtA6mej3sVziRaCZqj9h0O79xga109csaCpAK3KDiW7g+mY/ELL/WcZCFfipmRiJgFZinsFHwMXNBK5je1SwSHl2po3VENBKzDWjG3FRQkCXY8chsBvX0NY4LrFQeb5KA1kX0Dq5zip8DVweE8gHDkis5Qxb1cbJQRvbyASyLDHxPHBNLIRxQD53qpUjSZCxgE4+/BKfSDwSE+CU4FlydDSSEmsn61/KCok1wPhoHIP3vRwtSXIUD1jkbhNbYwIPy6FgMWWeE8wyY3emwFthGHuP+SY2x6TJUXnMVwt7G+3iMED3QSuzBXgw4tgjn6V6MgAfEtIOJpvPLgg0cZ887lALf9fYlGkzC8BrNNOgnMmTbw6wzFVuJ6K5V+9ILA1g/ZQ5pF5mqY3D9SCH72CRxSY+BLJD28RxwX0q8N2wXEoB6HysyEyDLyNHfXpAdj5PDVgp8aYIKjD8/KBe7gpXa7Vq0wLW2g2t3ViTKdCeGtAv8xnGwzU5BB9k8iwLLgdF5iGuGHzve1won2cQl2EcNo93PJ+e0O4fosB2V61+iS+AeTWxjY2ZAk+nByyxA7gnArg+k2elFbnaFFTd1CT9Cr2vFk6lxNuCFRHfnV6ee88OYH8BuTycdhYBt3t55qcGrJToEjxe4yC2eDkWBMnewWQqNX15UqBzMAPYL2MpcKzqn+HooOz4DU4nPWCRdonVEYdYfRsETtLBwG4jl9gY9gDXhmML2pTn3dSAFt9FegQLlGf7iGWmzKNmdNbIF5yS8YAKQc+PfYbr4CamWCYQandk4We3xjA3ejtOJdT9EuMgbonE3K8Kt6uVP1MDOsNKkdckXoo4+WZs8PKsCjf4GkDjR8FsFYZycODisU5iOeBFJOb1TIGXGxVc/GWhzAwzvgGmR5x7DVZ7OdbWQJaZis8EQgUR5F1/i3tV4oWY2eWgKsxWKwebBgx2scQawSvRVQPuLrhNWQp6gr/qHs0mplsmyLk5MTH6XLdSnvVJclX/wtrFOOvlU+D+OkF6gV2CbjJ8Tx99ZMnSxywTi4GZdSa+wXB7VGFBo/zrP4UGfxbMFYzHDsTNSSsd4ftEyOShqZNp5rMN49YRQiS5NYRMBAy22c3EleCWk4vJpyQA994NVa4YnEjXVPKAc13IVICDBFbmRrMgsW9LCeoK6lsZrfzOL/401rnO0QxkU4BV0E1M8bM8Jp9FiCuBSQMfdUDHMA66mcar0BWe3IJBqknIEQGmOdP6nSHQxljhjjvu/xwwJOB1IcPD1DkBTAG5VyeZo1X0nDPARpAmPs7kWJIo1KPJtbS+A/36DYmVQedxF44KD+kpfj0vAKvK4P7pjGW8cvxRe+MZaHVpV3wu7P4FjSUI5qMsu14AAAAASUVORK5CYII=
@@ -840,7 +840,7 @@
     // 番号后面添加图标, 不作用于番号 
     function displayMode(odiv,otext){
         if(setting.addSearchButton){
-            odiv.innerHTML = setting.searchButtonIcon?setting.searchButtonIcon:"✈";
+            odiv.innerHTML = (setting.searchButtonIcon ? setting.searchButtonIcon : "✈").trim();
             var divWrap = document.createElement("savdiv");
             divWrap.innerHTML = otext;
             divWrap.appendChild(odiv);
@@ -3132,7 +3132,7 @@
                 // 创建按钮元素
                 const buttonDiv = document.createElement("savdiv");
                 buttonDiv.classList.add("icon-button");
-                buttonDiv.innerHTML = icon;
+                buttonDiv.innerHTML = icon ? icon.trim() : "";
                 buttonDiv.dataset.url = finalURL;
                 buttonDiv.dataset.avid = avID;
 
@@ -3588,14 +3588,14 @@
             }
             /* 链接相关 */
             .savlink{
-                margin: 4px 4px 4px 4px;
+                margin: 2px 3px;
                 border-radius: 4px;
-                padding: 3px 5px;
+                padding: 2px 5px;
                 background: #fff;
                 display: inline-block;
                 transition: 0.2s;
                 transition-timing-function: ease-out;
-                box-shadow: -2px -2px 4px rgb(240 240 240), 2px 2px 4px rgb(70 70 70 / 50%);
+                box-shadow: -1px -1px 3px rgb(240 240 240), 1px 1px 3px rgb(70 70 70 / 40%);
                 cursor: pointer;
                 user-select: none;
             }
@@ -3690,17 +3690,29 @@
             }
 
             savdiv.sav-id{
-                transition: 0.5s;
+                cursor: pointer;
+                display: inline-block;
+                margin-left: 3px;
+                margin-right: 1px;
+                vertical-align: middle;
+                line-height: 1;
+                transition: 0.3s;
             }
-            savdiv.sav-id,
             savmagnet {
                 cursor: pointer;
+            }
+            .jellyfin_openPage {
+                display: inline-block;
+                margin-left: 2px;
+                margin-right: 1px;
+                vertical-align: middle;
+                line-height: 1;
             }
             .jellyfin_openPage svg{
                 cursor:pointer;
                 width:1em;
-                scale:0.9;
-                vertical-align:text-bottom;
+                height:1em;
+                vertical-align:middle;
                 display:inline;
             }
             u:has(savdiv){
@@ -3723,15 +3735,20 @@
             .icon-button{
                 cursor: pointer;
                 display: inline-block;
-                margin-left: 4px;
+                margin-left: 2px;
+                margin-right: 1px;
+                padding: 0 1px;
                 color: white;
-                font-size: 16px;
-                transition: 0.3s;
+                font-size: 14px;
+                line-height: 1;
+                vertical-align: middle;
+                transition: 0.2s;
             }
             .icon-button:hover{
                 background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
                 transform: translateY(-1px);
-                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                border-radius: 3px;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.25);
             }
             .icon-button.loading-status {
                 animation: sav-loading-pulse 1.5s infinite;
