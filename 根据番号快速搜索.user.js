@@ -3301,8 +3301,11 @@
 
         function is404Title(title) {
             if (!title) return false;
-            const lower = title.toLowerCase();
-            return lower.includes("404") || lower.includes("not found") || lower.includes("页面未找到") || lower.includes("頁面未找到") || lower.includes("找不到页面");
+            // 仅匹配“以 404 / Not Found / Page not found 开头”的错误页标题，
+            // 避免番号本身含 404（如 ABP-404）的正常影片标题被误判为不存在
+            return /^\s*(?:error\s*)?404(?![a-z0-9])/i.test(title) ||
+                   /^\s*(?:page\s+)?not\s+found/i.test(title) ||
+                   /^\s*(?:页面|頁面)未找到|^\s*找不到(?:页面|頁面)/.test(title);
         }
 
         // --- 统一的安全与拦截前置检查 ---
@@ -3674,6 +3677,12 @@
                         buttonDiv.title = "等待进入视口后检测资源有效性...";
 
                         const triggerFetch = () => {
+                            // 懒加载延迟触发期间，同 URL 的其他按钮可能已写入缓存，先重查避免重复请求
+                            const cachedNow = getCache(finalURL);
+                            if (cachedNow !== null) {
+                                applyButtonState(buttonDiv, strategy, cachedNow, null, true);
+                                return;
+                            }
                             buttonDiv.title = "正在检测资源有效性...";
                             fetchStatus(finalURL, strategy, avID).then(checkResult => {
                                 const isTrusted = !!checkResult?.trusted;
