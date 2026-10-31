@@ -100,6 +100,7 @@
 // @grant       GM_registerMenuCommand
 // @grant       GM_openInTab
 // @grant       unsafeWindow
+// @grant       GM_cookie
 // @run-at      document-idle
 
 // ==/UserScript==
@@ -3260,6 +3261,29 @@
             return str;
         }
 
+        // --- 尝试使用 GM_cookie 获取目标域名 Cookie（包含 HttpOnly 的 cf_clearance） ---
+        async function getDomainCookie(url) {
+            if (typeof GM_cookie !== "undefined" && GM_cookie.list) {
+                try {
+                    const domain = getDomainFromUrl(url);
+                    if (!domain) return "";
+                    return await new Promise((resolve) => {
+                        GM_cookie.list({ domain }, (cookies, error) => {
+                            if (error || !cookies || !cookies.length) {
+                                resolve("");
+                                return;
+                            }
+                            const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join("; ");
+                            resolve(cookieStr);
+                        });
+                    });
+                } catch (e) {
+                    return "";
+                }
+            }
+            return "";
+        }
+
         // --- 通用增强型 GM_xmlhttpRequest 请求封装 ---
         async function gmFetch(url, options = {}) {
             const method = options.method || "GET";
@@ -3273,16 +3297,25 @@
             if (typeof navigator !== "undefined" && navigator.userAgent) {
                 headers["User-Agent"] = navigator.userAgent;
             }
+            // 若未手动指定 Cookie，尝试读取浏览器同域 Cookie（如 cf_clearance）
+            if (!headers["Cookie"]) {
+                const autoCookie = await getDomainCookie(url);
+                if (autoCookie) {
+                    headers["Cookie"] = autoCookie;
+                }
+            }
             return new Promise((resolve, reject) => {
                 GM_xmlhttpRequest({
                     method,
                     url,
                     headers,
                     timeout,
+                    cookie: headers["Cookie"] || undefined,
                     onload: res => {
                         resolve({
                             status: res.status,
                             responseText: res.responseText || "",
+                            responseHeaders: res.responseHeaders || "",
                             finalUrl: res.finalUrl || res.responseURL || url
                         });
                     },
@@ -3346,7 +3379,10 @@
                 const res = await gmFetch(normalizedUrl, { method: "GET" });
 
                 const security = checkSecurityInterception(res.status, res.responseText, "Jable", normalizedUrl);
-                if (security.isIntercepted) return security.result;
+                if (security.isIntercepted) {
+                    logDebug(`[Jable Debug] status: ${res.status}, snippet: ${res.responseText.slice(0, 300).replace(/\s+/g, ' ')}, headers: ${res.responseHeaders}`);
+                    return security.result;
+                }
 
                 const finalUrlLower = (res.finalUrl || "").toLowerCase();
                 const pageTitle = extractPageTitle(res.responseText);
@@ -3662,6 +3698,11 @@
 
                 buttonDiv.addEventListener("click", e => {
                     GM_openInTab(finalURL, { active: true, insert: true, setParent: true });
+                    // 点击后自动重置该站点的熔断状态，便于用户在打开的新页面完成验证后返回重试
+                    const domain = getDomainFromUrl(finalURL);
+                    if (domain && domainCircuitBreakers.has(domain)) {
+                        domainCircuitBreakers.delete(domain);
+                    }
                     e.preventDefault();
                 });
 
@@ -3707,6 +3748,41 @@
                 }
             });
         }
+
+        // --- 窗口重获焦点时自动重试告警按钮（如用户在弹出标签页完成CF验证后切回原页面） ---
+        function recheckWarningButtons() {
+            const warnButtons = document.querySelectorAll('.sav-warn-video, .sav-warn-seeders');
+            if (warnButtons.length === 0) return;
+            logInfo(`[CircuitBreaker] 🔄 页面重新聚焦，自动复检 ${warnButtons.length} 个警告状态按钮...`);
+            warnButtons.forEach(btn => {
+                const url = btn.dataset.url;
+                const avID = btn.dataset.avid;
+                const strategy = findStrategy(url);
+                if (strategy && url) {
+                    btn.classList.remove(strategy.classWarn);
+                    btn.classList.add("loading-status", "sav-icon-loading");
+                    btn.title = "正在重新检测资源有效性...";
+                    fetchStatus(url, strategy, avID).then(checkResult => {
+                        const isTrusted = !!checkResult?.trusted;
+                        const exists = checkResult ? checkResult.exists : false;
+                        let warnReason = null;
+                        if (!isTrusted) {
+                            warnReason = (checkResult?.isChallenge || checkResult?.isRateLimit)
+                                ? strategy.tipWarn
+                                : `⚠️ 检测未完成 (${checkResult?.reason || "网络异常"})，请点击直接打开查看`;
+                        }
+                        applyButtonState(btn, strategy, exists, warnReason, false);
+                    });
+                }
+            });
+        }
+
+        window.addEventListener("focus", () => {
+            if (domainCircuitBreakers.size > 0) {
+                domainCircuitBreakers.clear();
+                recheckWarningButtons();
+            }
+        });
 
         return { addIconButtons, clearExternalCache };
     })();

@@ -100,5 +100,6 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_openInTab
 // @grant        unsafeWindow
+// @grant        GM_cookie
 // @run-at       document-idle
 // ==/UserScript==

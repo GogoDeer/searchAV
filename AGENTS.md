@@ -42,10 +42,10 @@ The main userscript is structured as an IIFE executed at `document-idle` via `@r
   - Injects action icons (🎬 Jable, 🎞️ 123AV, 🌱 Nyaa/Sukebei) based on `setting.list_all`.
   - **Strategy Pattern (`SITE_STRATEGIES`)**: Autonomous per-site validation rules, selector logic, classes, and tooltip copy.
   - **Quality Filtering Rules**: Nyaa torrent checks require `seeders >= 1` and `size >= 2GiB`.
-  - **In-Memory Domain Circuit Breaker**: Trips on anti-bot challenge (CF 403/503), immediately short-circuiting subsequent requests to that domain on the current page into warning state to prevent 403 request flooding and IP bans.
+  - **In-Memory Domain Circuit Breaker**: Trips on anti-bot challenge (CF 403/503), immediately short-circuiting subsequent requests to that domain on the current page into warning state to prevent 403 request flooding and IP bans; features auto-recovery on window focus and on warning icon click.
   - **Per-Domain Concurrency Queue**: Total concurrency 4, per-domain concurrency 2; eliminates starvation caused by slow or hanging sites.
   - **Viewport Lazy Loading**: Uses `IntersectionObserver` (300px prefetch margin) to only trigger network validation when icons enter view.
-  - **Cloudflare & Anti-Bot Defense**: Dynamically uses native `navigator.userAgent` to avoid clearance cookie mismatch; renders prominent warning styles (`sav-warn-*`) instead of misleading false-negatives (disabled/grayscale), guiding users to pass the challenge manually.
+  - **Cloudflare & Anti-Bot Defense**: Dynamically uses native `navigator.userAgent` and `@grant GM_cookie` to pass verified `cf_clearance` cookies; renders prominent warning styles (`sav-warn-*`) instead of misleading false-negatives (disabled/grayscale), guiding users to pass the challenge manually.
   - **Tiered Cache Isolation (`_external_link_cache_v2`)**: 24-hour TTL for positive confirmed resources, 3-hour TTL for negative results (404 / 0 seeders) to quickly pick up new releases, while strictly avoiding persisting transient challenge, rate-limited, or network error states.
 - **Info Fetching** (`getInfo`, `getInfo_wuma`, `getInfo_fc2`): Fetches metadata (title, actors, tags, cover image) from JavBus, JavDB, or FC2Hub via `GM_xmlhttpRequest`. Results are cached in `GM_setValue("avInfo2", ...)`.
 - **Popup Menu** (`createPattenr`): Generates a floating HUD with direct search buttons, cover image preview, actor links, tags, and translation tools.
