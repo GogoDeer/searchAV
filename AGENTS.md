@@ -41,12 +41,12 @@ The main userscript is structured as an IIFE executed at `document-idle` via `@r
 - **Resource Checking & Icon Buttons** (`IconButtonUtils`):
   - Injects action icons (🎬 Jable, 🎞️ 123AV, 🌱 Nyaa/Sukebei) based on `setting.list_all`.
   - **Strategy Pattern (`SITE_STRATEGIES`)**: Autonomous per-site validation rules, selector logic, classes, and tooltip copy.
-  - **Quality Filtering Rules**: Nyaa torrent checks require `seeders >= 1` and `size >= 2GiB`.
+  - **Quality Filtering Rules**: Nyaa torrent checks require `seeders >= 1` and `size >= 1GiB`.
   - **In-Memory Domain Circuit Breaker**: Trips on anti-bot challenge (CF 403/503), immediately short-circuiting subsequent requests to that domain on the current page into warning state to prevent 403 request flooding and IP bans; features auto-recovery on window focus and on warning icon click.
   - **Per-Domain Concurrency Queue**: Total concurrency 4, per-domain concurrency 2; eliminates starvation caused by slow or hanging sites.
   - **Viewport Lazy Loading**: Uses `IntersectionObserver` (300px prefetch margin) to only trigger network validation when icons enter view.
-  - **Cloudflare & Anti-Bot Defense**: Dynamically uses native `navigator.userAgent` and `@grant GM_cookie` to pass verified `cf_clearance` cookies; renders prominent warning styles (`sav-warn-*`) instead of misleading false-negatives (disabled/grayscale), guiding users to pass the challenge manually.
-  - **Tiered Cache Isolation (`_external_link_cache_v2`)**: 24-hour TTL for positive confirmed resources, 3-hour TTL for negative results (404 / 0 seeders) to quickly pick up new releases, while strictly avoiding persisting transient challenge, rate-limited, or network error states.
+  - **Cloudflare & Anti-Bot Defense**: Dynamically uses native `navigator.userAgent`, Client Hints (`sec-ch-ua*`), and navigation metadata (`Sec-Fetch-Dest: document` 等) 模拟浏览器真实页面访问，避免被 Cloudflare 识别为人机检测请求；渲染突出警示边框与引导文案（`sav-warn-*`），避免误导性假阴性。
+  - **Tiered Cache Isolation (`_external_link_cache_v3`)**: 24-hour TTL for positive confirmed resources, 3-hour TTL for negative results (404 / 0 seeders) to quickly pick up new releases, while strictly avoiding persisting transient challenge, rate-limited, or network error states.
 - **Info Fetching** (`getInfo`, `getInfo_wuma`, `getInfo_fc2`): Fetches metadata (title, actors, tags, cover image) from JavBus, JavDB, or FC2Hub via `GM_xmlhttpRequest`. Results are cached in `GM_setValue("avInfo2", ...)`.
 - **Popup Menu** (`createPattenr`): Generates a floating HUD with direct search buttons, cover image preview, actor links, tags, and translation tools.
 - **Preview Videos** (`getVideo`, `queryDMMVideoURL`, `getVideoURLFC2`): Fetches and streams short preview clips from DMM or FC2 with fallback to third-party mirrors.
@@ -77,7 +77,7 @@ The main userscript is structured as an IIFE executed at `document-idle` via `@r
   - `_setting`: User configuration JSON (custom search lists, UI toggles, Jellyfin/Emby URLs, qBittorrent host)
   - `_setting2`: Hidden internal runtime state (e.g., Sehuatang forum formhash)
   - `avInfo2`: Metadata and cover cache
-  - `_external_link_cache_v2`: Online playback / torrent availability cache (24h TTL)
+  - `_external_link_cache_v3`: Online playback / torrent availability cache (24h TTL)
 - **DOM & UI**: `GM_addStyle`, `GM_openInTab`, `GM_setClipboard`, `GM_registerMenuCommand`
 
 ## Code conventions & agent guidelines

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         根据番号快速搜索
 // @namespace    https://github.com/qxinGitHub/searchAV
-// @version      0.24.11
+// @version      0.24.12
 // @description  标记网页上的所有番号, 在相关网站快速方便的进行搜索
 // @author       iqxin
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAABLdJREFUWEftmG2IVGUUx3//O6MZapIftJTeKAqDiqiPGllZSdqHXsw3KmNnpm1LzYqgAleoMAJLw2xmdtsKqS3BkIy0QDSS6FNIkAgRilhUkPjGprtzTzx3d2fv3L0z986upB+6X+855/6e5znnf55zZWYTOY8fOUBJJ85HxoDtf8BRHM2odtAM0cF0fC6oMnicpoUjEjYKrqpr04DWxTjOsNQ8Chg3AWNiQHoR++RTZCybtYx/RgqbGtA6mej3sVziRaCZqj9h0O79xga109csaCpAK3KDiW7g+mY/ELL/WcZCFfipmRiJgFZinsFHwMXNBK5je1SwSHl2po3VENBKzDWjG3FRQkCXY8chsBvX0NY4LrFQeb5KA1kX0Dq5zip8DVweE8gHDkis5Qxb1cbJQRvbyASyLDHxPHBNLIRxQD53qpUjSZCxgE4+/BKfSDwSE+CU4FlydDSSEmsn61/KCok1wPhoHIP3vRwtSXIUD1jkbhNbYwIPy6FgMWWeE8wyY3emwFthGHuP+SY2x6TJUXnMVwt7G+3iMED3QSuzBXgw4tgjn6V6MgAfEtIOJpvPLgg0cZ887lALf9fYlGkzC8BrNNOgnMmTbw6wzFVuJ6K5V+9ILA1g/ZQ5pF5mqY3D9SCH72CRxSY+BLJD28RxwX0q8N2wXEoB6HysyEyDLyNHfXpAdj5PDVgp8aYIKjD8/KBe7gpXa7Vq0wLW2g2t3ViTKdCeGtAv8xnGwzU5BB9k8iwLLgdF5iGuGHzve1won2cQl2EcNo93PJ+e0O4fosB2V61+iS+AeTWxjY2ZAk+nByyxA7gnArg+k2elFbnaFFTd1CT9Cr2vFk6lxNuCFRHfnV6ee88OYH8BuTycdhYBt3t55qcGrJToEjxe4yC2eDkWBMnewWQqNX15UqBzMAPYL2MpcKzqn+HooOz4DU4nPWCRdonVEYdYfRsETtLBwG4jl9gY9gDXhmML2pTn3dSAFt9FegQLlGf7iGWmzKNmdNbIF5yS8YAKQc+PfYbr4CamWCYQandk4We3xjA3ejtOJdT9EuMgbonE3K8Kt6uVP1MDOsNKkdckXoo4+WZs8PKsCjf4GkDjR8FsFYZycODisU5iOeBFJOb1TIGXGxVc/GWhzAwzvgGmR5x7DVZ7OdbWQJaZis8EQgUR5F1/i3tV4oWY2eWgKsxWKwebBgx2scQawSvRVQPuLrhNWQp6gr/qHs0mplsmyLk5MTH6XLdSnvVJclX/wtrFOOvlU+D+OkF6gV2CbjJ8Tx99ZMnSxywTi4GZdSa+wXB7VGFBo/zrP4UGfxbMFYzHDsTNSSsd4ftEyOShqZNp5rMN49YRQiS5NYRMBAy22c3EleCWk4vJpyQA994NVa4YnEjXVPKAc13IVICDBFbmRrMgsW9LCeoK6lsZrfzOL/401rnO0QxkU4BV0E1M8bM8Jp9FiCuBSQMfdUDHMA66mcar0BWe3IJBqknIEQGmOdP6nSHQxljhjjvu/xwwJOB1IcPD1DkBTAG5VyeZo1X0nDPARpAmPs7kWJIo1KPJtbS+A/36DYmVQedxF44KD+kpfj0vAKvK4P7pjGW8cvxRe+MZaHVpV3wu7P4FjSUI5qMsu14AAAAASUVORK5CYII=
@@ -3101,7 +3101,7 @@
     // ============================================================
     const IconButtonUtils = (() => {
 
-        const CACHE_KEY = "_external_link_cache_v2";
+        const CACHE_KEY = "_external_link_cache_v3";
         const POSITIVE_CACHE_TTL = 24 * 60 * 60 * 1000; // 有效资源缓存 24 小时
         const NEGATIVE_CACHE_TTL = 3 * 60 * 60 * 1000;  // 负向结果（404/无种子）缓存 3 小时，兼顾新片刚出种或上传
         const inflightChecks = new Map(); // 内存级去重：URL -> Promise<CheckResult>
@@ -3142,7 +3142,10 @@
         try {
             if (GM_getValue("_external_link_cache")) {
                 GM_deleteValue("_external_link_cache");
-                console.info("[IconButton] 🔄 已自动清理旧版被污染的资源检测缓存 (_external_link_cache)");
+            }
+            if (GM_getValue("_external_link_cache_v2")) {
+                GM_deleteValue("_external_link_cache_v2");
+                console.info("[IconButton] 🔄 已自动升级资源检测缓存至 v3 (_external_link_cache_v3)");
             }
         } catch (e) {}
 
@@ -3197,6 +3200,7 @@
 
         function clearExternalCache() {
             GM_deleteValue(CACHE_KEY);
+            GM_deleteValue("_external_link_cache_v2");
             GM_deleteValue("_external_link_cache");
             logSuccess("✅ 资源有效性检测缓存已清空！");
         }
@@ -3297,28 +3301,52 @@
             const method = options.method || "GET";
             const timeout = options.timeout || 12000;
             const headers = {
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
                 "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "Upgrade-Insecure-Requests": "1",
                 ...options.headers
             };
-            // 动态使用宿主浏览器的真实 User-Agent，避免硬编码导致与 cf_clearance / TLS 指纹冲突
-            if (typeof navigator !== "undefined" && navigator.userAgent) {
-                headers["User-Agent"] = navigator.userAgent;
-            }
-            // 若未手动指定 Cookie，尝试读取浏览器同域 Cookie（如 cf_clearance）
-            if (!headers["Cookie"]) {
-                const autoCookie = await getDomainCookie(url);
-                if (autoCookie) {
-                    headers["Cookie"] = autoCookie;
+            // 动态使用宿主浏览器的真实 User-Agent 及 Client Hints，避免与 TLS/安全指纹冲突
+            if (typeof navigator !== "undefined") {
+                if (navigator.userAgent) {
+                    headers["User-Agent"] = navigator.userAgent;
+                }
+                if (navigator.userAgentData) {
+                    try {
+                        const uad = navigator.userAgentData;
+                        if (uad.brands && Array.isArray(uad.brands)) {
+                            headers["Sec-CH-UA"] = uad.brands.map(b => `"${b.brand}";v="${b.version}"`).join(", ");
+                        }
+                        headers["Sec-CH-UA-Mobile"] = uad.mobile ? "?1" : "?0";
+                        if (uad.platform) {
+                            headers["Sec-CH-UA-Platform"] = `"${uad.platform}"`;
+                        }
+                    } catch (e) {}
                 }
             }
+
+            // 若未手动指定 Cookie，尝试读取浏览器同域 Cookie（如 cf_clearance）
+            let customCookie = options.cookie || headers["Cookie"];
+            if (!customCookie) {
+                const autoCookie = await getDomainCookie(url);
+                if (autoCookie) {
+                    customCookie = autoCookie;
+                }
+            }
+            if (headers["Cookie"]) {
+                delete headers["Cookie"];
+            }
+
             return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
+                const reqDetails = {
                     method,
                     url,
                     headers,
                     timeout,
-                    cookie: headers["Cookie"] || undefined,
                     onload: res => {
                         resolve({
                             status: res.status,
@@ -3329,7 +3357,11 @@
                     },
                     ontimeout: () => reject(new Error(`Timeout (${timeout}ms)`)),
                     onerror: err => reject(err || new Error("Network Error"))
-                });
+                };
+                if (customCookie) {
+                    reqDetails.cookie = customCookie;
+                }
+                GM_xmlhttpRequest(reqDetails);
             });
         }
 
@@ -3394,8 +3426,12 @@
 
                 const finalUrlLower = (res.finalUrl || "").toLowerCase();
                 const pageTitle = extractPageTitle(res.responseText);
-                const isRedirectedTo404 = finalUrlLower.includes("/404") || finalUrlLower === "https://jable.tv/" || finalUrlLower === "https://jable.tv";
-                const is404Content = is404Title(pageTitle);
+                const isRedirectedTo404 = finalUrlLower.includes("/404") ||
+                                         finalUrlLower === "https://jable.tv/" ||
+                                         finalUrlLower === "https://jable.tv";
+                const is404Content = is404Title(pageTitle) ||
+                                     res.responseText.includes("window.location='/404.php'") ||
+                                     res.responseText.includes('window.location="/404.php"');
 
                 if (res.status === 404 || isRedirectedTo404 || is404Content) {
                     logDebug(`[Jable] ❌ 视频不存在 (404/重定向到404页面): ${normalizedUrl} (Title: ${pageTitle})`);
@@ -3456,9 +3492,9 @@
         }
 
         // ============================================================
-        // 🌱 Nyaa / Sukebei 检测实现 (要求: 做种>=1 且 大小>=2GiB)
+        // 🌱 Nyaa / Sukebei 检测实现 (要求: 做种>=1 且 大小>=1GiB)
         // ============================================================
-        async function checkNyaaTorrent(url, avID, minSeeders = 1, minSizeGiB = 2) {
+        async function checkNyaaTorrent(url, avID, minSeeders = 1, minSizeGiB = 1) {
             logInfo(`[Nyaa] 🔍 检索种子: ${url} (番号: ${avID})`);
             try {
                 const res = await gmFetch(url, { method: "GET" });
@@ -3549,12 +3585,12 @@
             {
                 name: "Nyaa",
                 match: (url) => url.includes("nyaa"),
-                check: (url, avID) => checkNyaaTorrent(url, avID, 1, 2),
+                check: (url, avID) => checkNyaaTorrent(url, avID, 1, 1),
                 classSuccess: "sav-has-seeders",
                 classFail: "sav-no-seeders",
                 classWarn: "sav-warn-seeders",
-                tipSuccess: "已检测到可用做种种子(做种>=1,大小>=2GiB)，点击打开",
-                tipFail: "未检测到有效做种种子(需做种>=1,大小>=2GiB)",
+                tipSuccess: "已检测到可用做种种子(做种>=1,大小>=1GiB)，点击打开",
+                tipFail: "未检测到有效做种种子(需做种>=1,大小>=1GiB)",
                 tipWarn: "⚠️ 检测种子触发安全验证或限流，点击打开查看"
             },
             {
