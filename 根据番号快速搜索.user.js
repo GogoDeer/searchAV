@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         根据番号快速搜索
 // @namespace    https://github.com/qxinGitHub/searchAV
-// @version      0.24.12
+// @version      0.24.13
 // @description  标记网页上的所有番号, 在相关网站快速方便的进行搜索
 // @author       iqxin
 // @icon         data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAABLdJREFUWEftmG2IVGUUx3//O6MZapIftJTeKAqDiqiPGllZSdqHXsw3KmNnpm1LzYqgAleoMAJLw2xmdtsKqS3BkIy0QDSS6FNIkAgRilhUkPjGprtzTzx3d2fv3L0z986upB+6X+855/6e5znnf55zZWYTOY8fOUBJJ85HxoDtf8BRHM2odtAM0cF0fC6oMnicpoUjEjYKrqpr04DWxTjOsNQ8Chg3AWNiQHoR++RTZCybtYx/RgqbGtA6mej3sVziRaCZqj9h0O79xga109csaCpAK3KDiW7g+mY/ELL/WcZCFfipmRiJgFZinsFHwMXNBK5je1SwSHl2po3VENBKzDWjG3FRQkCXY8chsBvX0NY4LrFQeb5KA1kX0Dq5zip8DVweE8gHDkis5Qxb1cbJQRvbyASyLDHxPHBNLIRxQD53qpUjSZCxgE4+/BKfSDwSE+CU4FlydDSSEmsn61/KCok1wPhoHIP3vRwtSXIUD1jkbhNbYwIPy6FgMWWeE8wyY3emwFthGHuP+SY2x6TJUXnMVwt7G+3iMED3QSuzBXgw4tgjn6V6MgAfEtIOJpvPLgg0cZ887lALf9fYlGkzC8BrNNOgnMmTbw6wzFVuJ6K5V+9ILA1g/ZQ5pF5mqY3D9SCH72CRxSY+BLJD28RxwX0q8N2wXEoB6HysyEyDLyNHfXpAdj5PDVgp8aYIKjD8/KBe7gpXa7Vq0wLW2g2t3ViTKdCeGtAv8xnGwzU5BB9k8iwLLgdF5iGuGHzve1won2cQl2EcNo93PJ+e0O4fosB2V61+iS+AeTWxjY2ZAk+nByyxA7gnArg+k2elFbnaFFTd1CT9Cr2vFk6lxNuCFRHfnV6ee88OYH8BuTycdhYBt3t55qcGrJToEjxe4yC2eDkWBMnewWQqNX15UqBzMAPYL2MpcKzqn+HooOz4DU4nPWCRdonVEYdYfRsETtLBwG4jl9gY9gDXhmML2pTn3dSAFt9FegQLlGf7iGWmzKNmdNbIF5yS8YAKQc+PfYbr4CamWCYQandk4We3xjA3ejtOJdT9EuMgbonE3K8Kt6uVP1MDOsNKkdckXoo4+WZs8PKsCjf4GkDjR8FsFYZycODisU5iOeBFJOb1TIGXGxVc/GWhzAwzvgGmR5x7DVZ7OdbWQJaZis8EQgUR5F1/i3tV4oWY2eWgKsxWKwebBgx2scQawSvRVQPuLrhNWQp6gr/qHs0mplsmyLk5MTH6XLdSnvVJclX/wtrFOOvlU+D+OkF6gV2CbjJ8Tx99ZMnSxywTi4GZdSa+wXB7VGFBo/zrP4UGfxbMFYzHDsTNSSsd4ftEyOShqZNp5rMN49YRQiS5NYRMBAy22c3EleCWk4vJpyQA994NVa4YnEjXVPKAc13IVICDBFbmRrMgsW9LCeoK6lsZrfzOL/401rnO0QxkU4BV0E1M8bM8Jp9FiCuBSQMfdUDHMA66mcar0BWe3IJBqknIEQGmOdP6nSHQxljhjjvu/xwwJOB1IcPD1DkBTAG5VyeZo1X0nDPARpAmPs7kWJIo1KPJtbS+A/36DYmVQedxF44KD+kpfj0vAKvK4P7pjGW8cvxRe+MZaHVpV3wu7P4FjSUI5qMsu14AAAAASUVORK5CYII=
@@ -101,6 +101,7 @@
 // @grant       GM_openInTab
 // @grant       unsafeWindow
 // @grant       GM_cookie
+// @grant       GM_download
 // @run-at      document-idle
 
 // ==/UserScript==
@@ -3105,6 +3106,7 @@
         const POSITIVE_CACHE_TTL = 24 * 60 * 60 * 1000; // 有效资源缓存 24 小时
         const NEGATIVE_CACHE_TTL = 3 * 60 * 60 * 1000;  // 负向结果（404/无种子）缓存 3 小时，兼顾新片刚出种或上传
         const inflightChecks = new Map(); // 内存级去重：URL -> Promise<CheckResult>
+        const nyaaTorrentsMemoryCache = new Map(); // Nyaa种子列表内存缓存：normalizedUrl -> { time, items }
 
         // --- 域名级瞬态熔断器（仅当前页面内存生命周期，防止单个站点被CF拦截后同页面持续发送403轰炸） ---
         const domainCircuitBreakers = new Map(); // domain -> { timestamp, reason }
@@ -3171,20 +3173,30 @@
             return (url || "").trim().toLowerCase();
         }
 
-        function getCache(url) {
+        function getCacheItem(url) {
             const cache = GM_getValue(CACHE_KEY, {});
             const key = normalizeCacheKey(url);
             const item = cache[key];
             if (item && item.time) {
                 const ttl = item.ttl || (item.val ? POSITIVE_CACHE_TTL : NEGATIVE_CACHE_TTL);
                 if (Date.now() - item.time < ttl) {
-                    return item.val;
+                    return item;
                 }
             }
             return null;
         }
 
-        function setCache(url, exists) {
+        function getCache(url) {
+            const item = getCacheItem(url);
+            return item !== null ? item.val : null;
+        }
+
+        function getCacheDetails(url) {
+            const item = getCacheItem(url);
+            return (item && item.details) ? item.details : null;
+        }
+
+        function setCache(url, exists, details = null) {
             let cache = GM_getValue(CACHE_KEY, {});
             const key = normalizeCacheKey(url);
             const now = Date.now();
@@ -3194,7 +3206,11 @@
                 const sorted = entries.sort((a, b) => b[1].time - a[1].time);
                 cache = Object.fromEntries(sorted.slice(0, 300));
             }
-            cache[key] = { val: exists, time: now, ttl };
+            const record = { val: exists, time: now, ttl };
+            if (details) {
+                record.details = details;
+            }
+            cache[key] = record;
             GM_setValue(CACHE_KEY, cache);
         }
 
@@ -3492,8 +3508,604 @@
         }
 
         // ============================================================
-        // 🌱 Nyaa / Sukebei 检测实现 (要求: 做种>=1 且 大小>=1GiB)
+        // 🌱 Nyaa / Sukebei 检测实现、种子解析与悬浮预览 (要求: 做种>=1 且 大小>=1GiB)
         // ============================================================
+        function parseNyaaTorrents(doc, pageUrl) {
+            const rows = [...doc.querySelectorAll("table.torrent-list tbody tr")];
+            const allItems = [];
+            rows.forEach(row => {
+                // 需求 5：使用同样的 highlight 规则，标识 success 行
+                const isSuccess = row.classList.contains("success");
+                const isDanger = row.classList.contains("danger");
+
+                // 1. 标题与详情页链接
+                const nameA = row.querySelector("td:nth-child(2) a:not(.comments)") || row.querySelector("td:nth-child(2) a:last-of-type");
+                const name = nameA ? nameA.textContent.trim() : "";
+                let viewHref = "";
+                if (nameA && nameA.getAttribute("href")) {
+                    try {
+                        viewHref = new URL(nameA.getAttribute("href"), pageUrl).href;
+                    } catch (e) {
+                        viewHref = nameA.getAttribute("href");
+                    }
+                }
+
+                // 2. 种子下载链接与磁链
+                const torrentA = row.querySelector("td:nth-child(3) a[href*='/download/']") || row.querySelector("td:nth-child(3) a[href$='.torrent']");
+                let torrentHref = "";
+                if (torrentA && torrentA.getAttribute("href")) {
+                    try {
+                        torrentHref = new URL(torrentA.getAttribute("href"), pageUrl).href;
+                    } catch (e) {
+                        torrentHref = torrentA.getAttribute("href");
+                    }
+                }
+                const magnetA = row.querySelector("td:nth-child(3) a[href^='magnet:']");
+                const magnetHref = magnetA ? magnetA.getAttribute("href") : "";
+
+                // 3. 文件大小
+                const sizeText = row.querySelector("td:nth-child(4)")?.textContent.trim() || "";
+                const sizeGiB = parseSizeToGiB(sizeText);
+
+                // 4. 发布日期与时间戳
+                const dateTd = row.querySelector("td:nth-child(5)");
+                const dateText = dateTd?.textContent.trim() || "";
+                let timestamp = 0;
+                if (dateTd && dateTd.getAttribute("data-timestamp")) {
+                    timestamp = parseInt(dateTd.getAttribute("data-timestamp"), 10) || 0;
+                }
+                if (!timestamp && dateText) {
+                    const parsed = Date.parse(dateText.replace(/-/g, "/"));
+                    if (!isNaN(parsed)) {
+                        timestamp = Math.floor(parsed / 1000);
+                    }
+                }
+
+                // 5. 做种数
+                const seedersText = row.querySelector("td:nth-child(6)")?.textContent.trim() || "0";
+                const seeders = parseInt(seedersText, 10) || 0;
+
+                allItems.push({
+                    name,
+                    viewHref,
+                    torrentHref,
+                    magnetHref,
+                    size: sizeText,
+                    sizeGiB,
+                    date: dateText,
+                    timestamp,
+                    seeders,
+                    isSuccess,
+                    isDanger
+                });
+            });
+
+            // 过滤有效做种 (做种数 > 0)
+            const activeItems = allItems.filter(item => item.seeders > 0);
+
+            // 用户需求：若无有效做种资源，则显示所有没有过滤的结果，不用过滤大小和种子数
+            let displayItems;
+            let hasActiveSeeders = true;
+            if (activeItems.length > 0) {
+                displayItems = activeItems;
+                hasActiveSeeders = true;
+            } else {
+                displayItems = allItems;
+                hasActiveSeeders = false;
+            }
+
+            // 需求 4：按发布日期排序，发布早的排在上边 (升序)
+            displayItems.sort((a, b) => a.timestamp - b.timestamp);
+
+            return {
+                items: displayItems,
+                allItems: allItems,
+                hasActiveSeeders: hasActiveSeeders,
+                rawCount: rows.length
+            };
+        }
+
+        // 精简持久化存储的种子字段，降低存储体积
+        function sanitizeTorrentDetails(parseResult) {
+            if (!parseResult) return null;
+            return {
+                hasActiveSeeders: parseResult.hasActiveSeeders,
+                rawCount: parseResult.rawCount,
+                items: (parseResult.items || []).map(item => ({
+                    name: item.name,
+                    viewHref: item.viewHref,
+                    torrentHref: item.torrentHref,
+                    magnetHref: item.magnetHref,
+                    size: item.size,
+                    sizeGiB: item.sizeGiB,
+                    date: item.date,
+                    timestamp: item.timestamp,
+                    seeders: item.seeders,
+                    isSuccess: item.isSuccess,
+                    isDanger: item.isDanger
+                }))
+            };
+        }
+
+        async function fetchNyaaTorrents(url, avID) {
+            const cacheKey = normalizeCacheKey(url);
+            // 1. 尝试读内存
+            const cached = nyaaTorrentsMemoryCache.get(cacheKey);
+            if (cached && (Date.now() - cached.time < 30 * 60 * 1000)) {
+                return { success: true, data: cached.data };
+            }
+
+            // 2. 尝试读持久化存储
+            const persisted = getCacheDetails(url);
+            if (persisted && Array.isArray(persisted.items)) {
+                nyaaTorrentsMemoryCache.set(cacheKey, { time: Date.now(), data: persisted });
+                return { success: true, data: persisted };
+            }
+
+            try {
+                const res = await gmFetch(url, { method: "GET" });
+                const security = checkSecurityInterception(res.status, res.responseText, "Nyaa", url);
+                if (security.isIntercepted) {
+                    return { success: false, isChallenge: true, reason: security.result?.reason || "安全拦截" };
+                }
+
+                if (res.status !== 200) {
+                    return { success: false, reason: `HTTP ${res.status}` };
+                }
+
+                if (!res.responseText.includes("navbar") && !res.responseText.includes("torrent-list")) {
+                    return { success: false, reason: "页面内容异常" };
+                }
+
+                const doc = new DOMParser().parseFromString(res.responseText, "text/html");
+                const parseResult = parseNyaaTorrents(doc, url);
+                const cleanDetails = sanitizeTorrentDetails(parseResult);
+                nyaaTorrentsMemoryCache.set(cacheKey, { time: Date.now(), data: cleanDetails });
+
+                // 若此前持久缓存只有布尔值而无 details，自动补写持久缓存，使下次刷新直接秒开
+                const currentCache = getCacheItem(url);
+                if (currentCache) {
+                    setCache(url, currentCache.val, cleanDetails);
+                }
+
+                return { success: true, data: cleanDetails };
+            } catch (err) {
+                return { success: false, reason: err.message || "网络请求失败" };
+            }
+        }
+
+        // --- 种子文件直接下载实现 ---
+        function downloadTorrentFile(torrentUrl, title) {
+            if (!torrentUrl) return;
+            const safeTitle = (title || "download").replace(/[\\/:*?"<>|]/g, "_").trim();
+            const filename = `${safeTitle}.torrent`;
+
+            if (typeof GM_download === "function") {
+                try {
+                    GM_download({
+                        url: torrentUrl,
+                        name: filename,
+                        saveAs: false,
+                        onerror: (err) => {
+                            logWarn("[TorrentDownload] GM_download 失败，使用 Blob 降级", err);
+                            fallbackBlobDownload(torrentUrl, filename);
+                        }
+                    });
+                    logSuccess(`[TorrentDownload] 📥 触发直接下载: ${filename}`);
+                    return;
+                } catch (e) {
+                    logWarn("[TorrentDownload] GM_download 调用异常", e);
+                }
+            }
+
+            fallbackBlobDownload(torrentUrl, filename);
+        }
+
+        function fallbackBlobDownload(torrentUrl, filename) {
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: torrentUrl,
+                responseType: "blob",
+                timeout: 15000,
+                onload: function (res) {
+                    if (res.status === 200 && res.response) {
+                        const blobUrl = URL.createObjectURL(res.response);
+                        const a = document.createElement("a");
+                        a.href = blobUrl;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(() => {
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(blobUrl);
+                        }, 2000);
+                        logSuccess(`[TorrentDownload] 📥 已通过 Blob 触发直接下载: ${filename}`);
+                    } else {
+                        window.open(torrentUrl, "_blank");
+                    }
+                },
+                onerror: function () {
+                    window.open(torrentUrl, "_blank");
+                }
+            });
+        }
+
+        // ============================================================
+        // 🪟 Nyaa / Sukebei 种子表格悬浮预览窗控制器 (单例)
+        // ============================================================
+        const TorrentPopover = (() => {
+            let popoverEl = null;
+            let currentBtn = null;
+            let currentUrl = null;
+            let showTimer = null;
+            let hideTimer = null;
+
+            function initPopover() {
+                if (popoverEl) return popoverEl;
+                popoverEl = document.createElement("savdiv");
+                popoverEl.className = "sav-torrent-popover";
+                popoverEl.style.display = "none";
+
+                popoverEl.addEventListener("mouseenter", () => {
+                    if (hideTimer) {
+                        clearTimeout(hideTimer);
+                        hideTimer = null;
+                    }
+                });
+
+                popoverEl.addEventListener("mouseleave", () => {
+                    hideTimer = setTimeout(() => {
+                        hide();
+                    }, 250);
+                });
+
+                document.addEventListener("pointerdown", (e) => {
+                    if (!popoverEl || popoverEl.style.display === "none") return;
+                    if (popoverEl.contains(e.target) || (currentBtn && currentBtn.contains(e.target))) {
+                        return;
+                    }
+                    hide(true);
+                }, true);
+
+                document.body.appendChild(popoverEl);
+                return popoverEl;
+            }
+
+            function position(buttonDiv) {
+                if (!popoverEl || !buttonDiv) return;
+                const rect = buttonDiv.getBoundingClientRect();
+                const margin = 8;
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+
+                popoverEl.style.visibility = "hidden";
+                popoverEl.style.display = "block";
+                const popRect = popoverEl.getBoundingClientRect();
+
+                // 垂直定位：优先置于图标下方，空间不足则翻转至上方
+                let top = rect.bottom + margin;
+                if (top + popRect.height > viewportHeight - margin && rect.top - margin - popRect.height > 0) {
+                    top = rect.top - margin - popRect.height;
+                }
+
+                // 水平定位：居中对齐图标，两端边界夹紧
+                let left = rect.left + (rect.width / 2) - (popRect.width / 2);
+                if (left < margin) left = margin;
+                if (left + popRect.width > viewportWidth - margin) {
+                    left = viewportWidth - margin - popRect.width;
+                }
+
+                popoverEl.style.top = `${Math.round(top)}px`;
+                popoverEl.style.left = `${Math.round(left)}px`;
+                popoverEl.style.visibility = "visible";
+            }
+
+            function renderLoading(avID) {
+                initPopover();
+                popoverEl.innerHTML = `
+                    <savdiv class="sav-tp-header">
+                        <savdiv class="sav-tp-title">
+                            <span class="sav-tp-badge">🌱 Nyaa / Sukebei</span>
+                            <span class="sav-tp-avid">${avID || ""}</span>
+                        </savdiv>
+                        <savdiv class="sav-tp-actions">
+                            <button class="sav-tp-close" title="关闭">×</button>
+                        </savdiv>
+                    </savdiv>
+                    <savdiv class="sav-tp-body">
+                        <savdiv class="sav-tp-loading">
+                            <span class="sav-tp-spinner"></span>
+                            <span>正在获取种子列表，请稍候...</span>
+                        </savdiv>
+                    </savdiv>
+                `;
+                bindCloseButton();
+            }
+
+            function renderError(message, isChallenge, url, avID) {
+                initPopover();
+                popoverEl.innerHTML = `
+                    <savdiv class="sav-tp-header">
+                        <savdiv class="sav-tp-title">
+                            <span class="sav-tp-badge">🌱 Nyaa / Sukebei</span>
+                            <span class="sav-tp-avid">${avID || ""}</span>
+                        </savdiv>
+                        <savdiv class="sav-tp-actions">
+                            <button class="sav-tp-close" title="关闭">×</button>
+                        </savdiv>
+                    </savdiv>
+                    <savdiv class="sav-tp-body">
+                        <savdiv class="sav-tp-msg sav-tp-msg-error">
+                            <p>${message || "获取种子列表失败"}</p>
+                            ${isChallenge ? `<p class="sav-tp-subtext">检测触发 Cloudflare 真人验证，请<a href="${url}" target="_blank" class="sav-tp-open-link">点击此处在新标签页完成验证</a>后返回重试。</p>` : ""}
+                        </savdiv>
+                    </savdiv>
+                `;
+                bindCloseButton();
+            }
+
+            function renderEmpty(avID, url) {
+                initPopover();
+                popoverEl.innerHTML = `
+                    <savdiv class="sav-tp-header">
+                        <savdiv class="sav-tp-title">
+                            <span class="sav-tp-badge">🌱 Nyaa / Sukebei</span>
+                            <span class="sav-tp-avid">${avID || ""}</span>
+                        </savdiv>
+                        <savdiv class="sav-tp-actions">
+                            <button class="sav-tp-close" title="关闭">×</button>
+                        </savdiv>
+                    </savdiv>
+                    <savdiv class="sav-tp-body">
+                        <savdiv class="sav-tp-msg">
+                            <p>未发现有效做种的种子 (已过滤做种数=0)</p>
+                            <a href="${url}" target="_blank" class="sav-tp-open-link">直接前往原站查看全部 0 做种结果 ↗</a>
+                        </savdiv>
+                    </savdiv>
+                `;
+                bindCloseButton();
+            }
+
+            function renderTable(data, avID, url) {
+                initPopover();
+                const items = data.items || [];
+                const hasActive = data.hasActiveSeeders;
+
+                const rowsHtml = items.map(item => {
+                    const trClass = item.isSuccess ? "sav-tr-success" : (item.isDanger ? "sav-tr-danger" : "sav-tr-default");
+                    const nameEscaped = escapeHtml(item.name);
+                    const safeNameAttr = nameEscaped.replace(/"/g, "&quot;");
+                    const seederColor = item.seeders > 0 ? "#16a34a" : "#94a3b8";
+
+                    return `
+                        <tr class="sav-tp-row ${trClass}">
+                            <td class="sav-tp-td-name" title="${safeNameAttr}">
+                                ${item.viewHref ? `<a href="${item.viewHref}" target="_blank" rel="noopener noreferrer">${nameEscaped}</a>` : nameEscaped}
+                            </td>
+                            <td class="sav-tp-td-size">${item.size || "-"}</td>
+                            <td class="sav-tp-td-date" title="时间戳: ${item.timestamp || 0}">${item.date || "-"}</td>
+                            <td class="sav-tp-td-seeders" style="color: ${seederColor} !important;">${item.seeders}</td>
+                            <td class="sav-tp-td-links">
+                                ${item.torrentHref ? `<a class="sav-tp-dl-btn" data-url="${item.torrentHref}" data-title="${safeNameAttr}" title="点击直接下载种子文件">📥 下载</a>` : ""}
+                                ${item.magnetHref ? `<a class="sav-tp-mag-btn" data-magnet="${item.magnetHref}" title="磁力链接 (点击复制 / 调用 qBit)">🧲</a>` : ""}
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+
+                const countBadgeHtml = hasActive
+                    ? `<span class="sav-tp-count">共 ${items.length} 个做种资源</span>`
+                    : `<span class="sav-tp-count sav-tp-count-inactive" title="原站暂无做种者，已展示全部未过滤历史结果">无有效做种 (展示全部 ${items.length} 个未过滤结果)</span>`;
+
+                popoverEl.innerHTML = `
+                    <savdiv class="sav-tp-header">
+                        <savdiv class="sav-tp-title">
+                            <span class="sav-tp-badge">🌱 Nyaa / Sukebei</span>
+                            <span class="sav-tp-avid">${avID || ""}</span>
+                        </savdiv>
+                        <savdiv class="sav-tp-actions">
+                            ${countBadgeHtml}
+                            <a href="${url}" target="_blank" class="sav-tp-link-raw" title="在新标签页打开原搜索页面">原站 ↗</a>
+                            <button class="sav-tp-close" title="关闭">×</button>
+                        </savdiv>
+                    </savdiv>
+                    <savdiv class="sav-tp-body">
+                        <table class="sav-tp-table">
+                            <thead>
+                                <tr>
+                                    <th class="sav-tp-th-name">名称</th>
+                                    <th class="sav-tp-th-size">大小</th>
+                                    <th class="sav-tp-th-date">日期</th>
+                                    <th class="sav-tp-th-seeders">做种</th>
+                                    <th class="sav-tp-th-links">链接</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </savdiv>
+                `;
+
+                bindCloseButton();
+
+                // 绑定种子直接下载
+                popoverEl.querySelectorAll(".sav-tp-dl-btn").forEach(btn => {
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const tUrl = btn.dataset.url;
+                        const tTitle = btn.dataset.title;
+                        downloadTorrentFile(tUrl, tTitle);
+                    });
+                });
+
+                // 绑定磁力链接（优先调用 qBit，同时复制到剪贴板）
+                popoverEl.querySelectorAll(".sav-tp-mag-btn").forEach(btn => {
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const magnet = btn.dataset.magnet;
+                        if (magnet) {
+                            GM_setClipboard(magnet);
+                            if (typeof qBit === "function" && setting && setting.qBitHost) {
+                                qBit(magnet);
+                            } else {
+                                btn.textContent = "已复制";
+                                setTimeout(() => { btn.textContent = "🧲"; }, 1500);
+                            }
+                        }
+                    });
+                });
+            }
+
+            function bindCloseButton() {
+                const closeBtn = popoverEl.querySelector(".sav-tp-close");
+                if (closeBtn) {
+                    closeBtn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        hide(true);
+                    });
+                }
+            }
+
+            function escapeHtml(str) {
+                if (!str) return "";
+                return str
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+            }
+
+            function show(buttonDiv, url, avID) {
+                if (hideTimer) {
+                    clearTimeout(hideTimer);
+                    hideTimer = null;
+                }
+                currentBtn = buttonDiv;
+                currentUrl = url;
+
+                const cacheKey = normalizeCacheKey(url);
+
+                // 1. 优先读取内存缓存
+                let cachedData = nyaaTorrentsMemoryCache.get(cacheKey)?.data;
+
+                // 2. 内存未命中，读取持久化存储（跨页面刷新永久秒开）
+                if (!cachedData) {
+                    cachedData = getCacheDetails(url);
+                    if (cachedData) {
+                        nyaaTorrentsMemoryCache.set(cacheKey, { time: Date.now(), data: cachedData });
+                    }
+                }
+
+                // 3. 命中缓存：直接 0 延迟秒开，绝不闪现任何 Loading！
+                if (cachedData && Array.isArray(cachedData.items)) {
+                    if (cachedData.items.length === 0) {
+                        renderEmpty(avID, url);
+                    } else {
+                        renderTable(cachedData, avID, url);
+                    }
+                    position(buttonDiv);
+                    return;
+                }
+
+                // 4. 若后台刚好正在发起有效性质检（请求飞行中），直接复用同一请求，避免重复抓取
+                if (inflightChecks.has(cacheKey)) {
+                    renderLoading(avID);
+                    position(buttonDiv);
+                    inflightChecks.get(cacheKey).then(checkResult => {
+                        if (!popoverEl || popoverEl.style.display === "none" || currentUrl !== url) return;
+                        if (checkResult && checkResult.details) {
+                            if (checkResult.details.items.length === 0) {
+                                renderEmpty(avID, url);
+                            } else {
+                                renderTable(checkResult.details, avID, url);
+                            }
+                        } else {
+                            renderEmpty(avID, url);
+                        }
+                        position(buttonDiv);
+                    }).catch(() => {
+                        // 降级由 fetchNyaaTorrents 处理
+                    });
+                    return;
+                }
+
+                // 5. 首次抓取（既无持久缓存也无飞行请求）
+                renderLoading(avID);
+                position(buttonDiv);
+
+                fetchNyaaTorrents(url, avID).then(res => {
+                    if (!popoverEl || popoverEl.style.display === "none" || currentUrl !== url) return;
+
+                    if (!res.success) {
+                        renderError(res.reason, res.isChallenge, url, avID);
+                    } else if (!res.data || !res.data.items || res.data.items.length === 0) {
+                        renderEmpty(avID, url);
+                    } else {
+                        renderTable(res.data, avID, url);
+                    }
+                    position(buttonDiv);
+                });
+            }
+
+            function hide(force = false) {
+                if (showTimer) {
+                    clearTimeout(showTimer);
+                    showTimer = null;
+                }
+                if (hideTimer) {
+                    clearTimeout(hideTimer);
+                    hideTimer = null;
+                }
+                if (popoverEl) {
+                    popoverEl.style.display = "none";
+                }
+                currentBtn = null;
+                currentUrl = null;
+            }
+
+            function scheduleShow(buttonDiv, url, avID) {
+                if (hideTimer) {
+                    clearTimeout(hideTimer);
+                    hideTimer = null;
+                }
+                if (showTimer) {
+                    clearTimeout(showTimer);
+                }
+                showTimer = setTimeout(() => {
+                    show(buttonDiv, url, avID);
+                }, 200);
+            }
+
+            function scheduleHide() {
+                if (showTimer) {
+                    clearTimeout(showTimer);
+                    showTimer = null;
+                }
+                if (hideTimer) {
+                    clearTimeout(hideTimer);
+                }
+                hideTimer = setTimeout(() => {
+                    hide();
+                }, 250);
+            }
+
+            return { scheduleShow, scheduleHide, hide };
+        })();
+
+        function bindNyaaTorrentHover(buttonDiv, finalURL, avID) {
+            buttonDiv.removeAttribute("title");
+            buttonDiv.addEventListener("mouseenter", () => {
+                buttonDiv.removeAttribute("title");
+                TorrentPopover.scheduleShow(buttonDiv, finalURL, avID);
+            });
+            buttonDiv.addEventListener("mouseleave", () => {
+                TorrentPopover.scheduleHide();
+            });
+        }
+
         async function checkNyaaTorrent(url, avID, minSeeders = 1, minSizeGiB = 1) {
             logInfo(`[Nyaa] 🔍 检索种子: ${url} (番号: ${avID})`);
             try {
@@ -3517,49 +4129,33 @@
                 const allRows = doc.querySelectorAll("table.torrent-list tbody tr");
 
                 if (allRows.length === 0) {
+                    const emptyData = { items: [], allItems: [], hasActiveSeeders: false, rawCount: 0 };
+                    nyaaTorrentsMemoryCache.set(normalizeCacheKey(url), { time: Date.now(), data: emptyData });
                     logDebug(`[Nyaa] ❌ 未搜索到任何种子 (0 个结果): ${url}`);
-                    return { trusted: true, exists: false, reason: "0 torrents found" };
+                    return { trusted: true, exists: false, details: emptyData, reason: "0 torrents found" };
                 }
 
-                const torrents = extractFilteredTorrents(doc, minSeeders, minSizeGiB);
-                const has = torrents.length > 0;
+                const parseResult = parseNyaaTorrents(doc, url);
+                const cleanDetails = sanitizeTorrentDetails(parseResult);
+                nyaaTorrentsMemoryCache.set(normalizeCacheKey(url), { time: Date.now(), data: cleanDetails });
+
+                const qualifiedTorrents = parseResult.allItems.filter(t => t.seeders >= minSeeders && t.sizeGiB >= minSizeGiB);
+                const has = qualifiedTorrents.length > 0;
                 if (has) {
-                    logSuccess(`[Nyaa] ✅ 找到有效种子 (${torrents.length}/${allRows.length}个达标，做种>=${minSeeders}，大小>=${minSizeGiB}GiB): ${url}`);
+                    logSuccess(`[Nyaa] ✅ 找到有效种子 (${qualifiedTorrents.length}/${allRows.length}个达标，做种>=${minSeeders}，大小>=${minSizeGiB}GiB): ${url}`);
                 } else {
                     logDebug(`[Nyaa] ❌ 找到 ${allRows.length} 个结果但均无可用做种 (做种需>=${minSeeders} 且 大小需>=${minSizeGiB}GiB): ${url}`);
                 }
                 return {
                     trusted: true,
                     exists: has,
-                    reason: has ? `Found ${torrents.length} active torrents` : "No active seeders or size too small"
+                    details: cleanDetails,
+                    reason: has ? `Found ${qualifiedTorrents.length} active torrents` : "No active seeders or size too small"
                 };
             } catch (err) {
                 logWarn(`[Nyaa] ⚠️ 检索失败: ${err.message || err} (${url})`);
                 return { trusted: false, exists: false, reason: err.message || "Network Error" };
             }
-        }
-
-        function extractFilteredTorrents(doc, minSeeders, minSizeGiB) {
-            const rows = [...doc.querySelectorAll("table.torrent-list tbody tr")];
-            return rows
-                .map((row, idx) => {
-                    const nameText = row.querySelector("td:nth-child(2) a:last-of-type")?.textContent.trim() ?? "";
-                    const sizeText = row.querySelector("td:nth-child(4)")?.textContent.trim() ?? "";
-                    const seedersText = row.querySelector("td:nth-child(6)")?.textContent.trim() ?? "";
-                    const torrentLink = row.querySelector("td:nth-child(3) a[href$='.torrent']")?.href ||
-                                        row.querySelector("td:nth-child(3) a[href^='magnet:']")?.href;
-                    if (!torrentLink) return null;
-
-                    const seeders = parseInt(seedersText, 10) || 0;
-                    const sizeGiB = parseSizeToGiB(sizeText);
-                    const passSeeder = seeders >= minSeeders;
-                    const passSize = sizeGiB >= minSizeGiB;
-                    const pass = passSeeder && passSize;
-                    return pass
-                        ? { torrent: torrentLink, seeders, size: sizeText, name: nameText }
-                        : null;
-                })
-                .filter(Boolean);
         }
 
         function parseSizeToGiB(sizeText) {
@@ -3651,7 +4247,7 @@
                 return await strategy.check(url, avID);
             }).then(checkResult => {
                 if (checkResult && checkResult.trusted) {
-                    setCache(url, checkResult.exists);
+                    setCache(url, checkResult.exists, checkResult.details);
                 } else {
                     logDebug(`[Cache] 结果为临时状态/被拦截 (${checkResult?.reason || "unknown"})，不写入持久缓存: ${url}`);
                 }
@@ -3676,16 +4272,31 @@
                 "has-video", "no-video", "has-seeders", "no-seeders"
             );
 
+            // 种子图标已具备悬浮种子详情表格，去除原生系统 tooltip，避免重复遮挡
+            const isTorrentSite = strategy.name === "Nyaa";
+
             if (warnReason) {
                 // ⚠️ 触发人机验证/限流/超时等不可信状态：高亮警示提示，绝不呈现 disable 灰色！
                 buttonDiv.classList.add(strategy.classWarn);
-                buttonDiv.title = warnReason;
+                if (!isTorrentSite) {
+                    buttonDiv.title = warnReason;
+                } else {
+                    buttonDiv.removeAttribute("title");
+                }
             } else if (exists) {
                 buttonDiv.classList.add(strategy.classSuccess);
-                buttonDiv.title = strategy.tipSuccess + (fromCache ? " (来自缓存)" : "");
+                if (!isTorrentSite) {
+                    buttonDiv.title = strategy.tipSuccess + (fromCache ? " (来自缓存)" : "");
+                } else {
+                    buttonDiv.removeAttribute("title");
+                }
             } else {
                 buttonDiv.classList.add(strategy.classFail);
-                buttonDiv.title = strategy.tipFail + (fromCache ? " (来自缓存)" : "");
+                if (!isTorrentSite) {
+                    buttonDiv.title = strategy.tipFail + (fromCache ? " (来自缓存)" : "");
+                } else {
+                    buttonDiv.removeAttribute("title");
+                }
             }
         }
 
@@ -3721,7 +4332,11 @@
             }
             buttonDiv.classList.remove(strategy.classWarn);
             buttonDiv.classList.add("loading-status", "sav-icon-loading");
-            buttonDiv.title = "正在检测资源有效性...";
+            if (strategy.name !== "Nyaa") {
+                buttonDiv.title = "正在检测资源有效性...";
+            } else {
+                buttonDiv.removeAttribute("title");
+            }
             fetchStatus(finalURL, strategy, avID).then(checkResult => {
                 const isTrusted = !!checkResult?.trusted;
                 const exists = checkResult ? checkResult.exists : false;
@@ -3739,8 +4354,12 @@
         function observeOrCheckButton(buttonDiv, finalURL, strategy, avID) {
             buttonDiv.classList.remove(strategy.classWarn);
             buttonDiv.classList.add("loading-status", "sav-icon-loading");
+            if (strategy.name !== "Nyaa") {
+                buttonDiv.title = lazyObserver ? "等待进入视口后检测资源有效性..." : "正在检测资源有效性...";
+            } else {
+                buttonDiv.removeAttribute("title");
+            }
             if (lazyObserver) {
-                buttonDiv.title = "等待进入视口后检测资源有效性...";
                 buttonDiv._savTriggerFetch = () => executeButtonCheck(buttonDiv, finalURL, strategy, avID);
                 lazyObserver.unobserve(buttonDiv);
                 lazyObserver.observe(buttonDiv);
@@ -3792,6 +4411,10 @@
 
                 const strategy = findStrategy(finalURL);
                 if (strategy) {
+                    // 若为种子检索站点（Nyaa/Sukebei），挂载悬浮展示种子表格交互
+                    if (strategy.name === "Nyaa") {
+                        bindNyaaTorrentHover(buttonDiv, finalURL, avID);
+                    }
                     const cached = getCache(finalURL);
                     if (cached !== null) {
                         applyButtonState(buttonDiv, strategy, cached, null, true);
@@ -4353,6 +4976,261 @@
                box-shadow: 0 0 0 1px #f59e0b, 0 0 4px rgba(245, 158, 11, 0.6) !important;
             }
             /* CSS for sav-btn-group and icon-button end */
+
+            /* CSS for Torrent Preview Popover start */
+            .sav-torrent-popover {
+                position: fixed !important;
+                z-index: 2147483647 !important;
+                background: #ffffff !important;
+                color: #1e293b !important;
+                border-radius: 8px !important;
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+                width: 680px !important;
+                max-width: calc(100vw - 20px) !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+                font-size: 13px !important;
+                line-height: 1.4 !important;
+                text-align: left !important;
+                box-sizing: border-box !important;
+                overflow: hidden !important;
+                animation: sav-popover-fadein 0.15s ease-out !important;
+            }
+            @keyframes sav-popover-fadein {
+                from { opacity: 0; transform: scale(0.97); }
+                to { opacity: 1; transform: scale(1); }
+            }
+            .sav-torrent-popover * {
+                box-sizing: border-box !important;
+            }
+            .sav-tp-header {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                padding: 8px 12px !important;
+                background: #f8fafc !important;
+                border-bottom: 1px solid #e2e8f0 !important;
+            }
+            .sav-tp-title {
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                font-weight: 600 !important;
+            }
+            .sav-tp-badge {
+                font-size: 12px !important;
+                background: #ecfdf5 !important;
+                color: #059669 !important;
+                padding: 2px 6px !important;
+                border-radius: 4px !important;
+                border: 1px solid #a7f3d0 !important;
+            }
+            .sav-tp-avid {
+                color: #0f172a !important;
+                font-size: 13px !important;
+            }
+            .sav-tp-actions {
+                display: flex !important;
+                align-items: center !important;
+                gap: 10px !important;
+            }
+            .sav-tp-count {
+                font-size: 12px !important;
+                color: #64748b !important;
+            }
+            .sav-tp-count-inactive {
+                color: #ea580c !important;
+                background: #fff7ed !important;
+                padding: 1px 6px !important;
+                border-radius: 4px !important;
+                border: 1px solid #fed7aa !important;
+                font-size: 11px !important;
+            }
+            .sav-tp-link-raw {
+                font-size: 12px !important;
+                color: #3b82f6 !important;
+                text-decoration: none !important;
+            }
+            .sav-tp-link-raw:hover {
+                text-decoration: underline !important;
+            }
+            .sav-tp-close {
+                background: transparent !important;
+                border: none !important;
+                cursor: pointer !important;
+                font-size: 18px !important;
+                line-height: 1 !important;
+                color: #94a3b8 !important;
+                padding: 0 4px !important;
+                transition: color 0.15s !important;
+            }
+            .sav-tp-close:hover {
+                color: #0f172a !important;
+            }
+            .sav-tp-body {
+                max-height: 380px !important;
+                overflow-y: auto !important;
+                background: #ffffff !important;
+            }
+            .sav-tp-table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+                margin: 0 !important;
+                font-size: 12px !important;
+            }
+            .sav-tp-table th {
+                position: sticky !important;
+                top: 0 !important;
+                background: #f1f5f9 !important;
+                color: #475569 !important;
+                font-weight: 600 !important;
+                padding: 8px 10px !important;
+                border-bottom: 1px solid #cbd5e1 !important;
+                white-space: nowrap !important;
+                z-index: 1 !important;
+            }
+            .sav-tp-th-name { text-align: left !important; }
+            .sav-tp-th-size { text-align: center !important; width: 85px !important; }
+            .sav-tp-th-date { text-align: center !important; width: 120px !important; }
+            .sav-tp-th-seeders { text-align: center !important; width: 60px !important; }
+            .sav-tp-th-links { text-align: center !important; width: 95px !important; }
+
+            .sav-tp-row td {
+                padding: 6px 10px !important;
+                border-bottom: 1px solid #f1f5f9 !important;
+                vertical-align: middle !important;
+            }
+            .sav-tp-td-name {
+                text-align: left !important;
+                max-width: 320px !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
+            }
+            .sav-tp-td-name a {
+                color: #2563eb !important;
+                text-decoration: none !important;
+            }
+            .sav-tp-td-name a:hover {
+                text-decoration: underline !important;
+            }
+            .sav-tp-td-size {
+                text-align: center !important;
+                color: #334155 !important;
+                font-family: monospace !important;
+                font-size: 11.5px !important;
+                white-space: nowrap !important;
+            }
+            .sav-tp-td-date {
+                text-align: center !important;
+                color: #64748b !important;
+                font-size: 11.5px !important;
+                white-space: nowrap !important;
+            }
+            .sav-tp-td-seeders {
+                text-align: center !important;
+                font-weight: 700 !important;
+                color: #16a34a !important;
+                white-space: nowrap !important;
+            }
+            .sav-tp-td-links {
+                text-align: center !important;
+                white-space: nowrap !important;
+            }
+            .sav-tp-dl-btn {
+                display: inline-block !important;
+                background: #0284c7 !important;
+                color: #ffffff !important;
+                padding: 2px 6px !important;
+                border-radius: 4px !important;
+                font-size: 11px !important;
+                text-decoration: none !important;
+                cursor: pointer !important;
+                transition: background 0.15s !important;
+                margin-right: 4px !important;
+                font-weight: 500 !important;
+            }
+            .sav-tp-dl-btn:hover {
+                background: #0369a1 !important;
+                color: #ffffff !important;
+            }
+            .sav-tp-mag-btn {
+                display: inline-block !important;
+                background: #f1f5f9 !important;
+                color: #475569 !important;
+                padding: 2px 5px !important;
+                border-radius: 4px !important;
+                font-size: 11px !important;
+                text-decoration: none !important;
+                cursor: pointer !important;
+                border: 1px solid #cbd5e1 !important;
+                transition: all 0.15s !important;
+            }
+            .sav-tp-mag-btn:hover {
+                background: #e2e8f0 !important;
+                color: #0f172a !important;
+            }
+
+            /* Sukebei / Nyaa 原生高亮规则：tr.success */
+            .sav-tp-row.sav-tr-success td {
+                background-color: #dff0d8 !important;
+                color: #3c763d !important;
+            }
+            .sav-tp-row.sav-tr-success:hover td {
+                background-color: #d0e9c6 !important;
+            }
+            .sav-tp-row.sav-tr-success .sav-tp-td-name a {
+                color: #2b542c !important;
+                font-weight: 500 !important;
+            }
+            .sav-tp-row.sav-tr-success .sav-tp-td-seeders {
+                color: #15803d !important;
+            }
+
+            /* 普通行 hover 高亮 */
+            .sav-tp-row.sav-tr-default:hover td {
+                background-color: #f8fafc !important;
+            }
+
+            /* 加载中与提示框 */
+            .sav-tp-loading {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 10px !important;
+                padding: 30px !important;
+                color: #64748b !important;
+            }
+            .sav-tp-spinner {
+                width: 18px !important;
+                height: 18px !important;
+                border: 2px solid #e2e8f0 !important;
+                border-top-color: #3b82f6 !important;
+                border-radius: 50% !important;
+                animation: sav-spinner 0.6s linear infinite !important;
+            }
+            @keyframes sav-spinner {
+                to { transform: rotate(360deg); }
+            }
+            .sav-tp-msg {
+                padding: 24px !important;
+                text-align: center !important;
+                color: #64748b !important;
+            }
+            .sav-tp-msg-error {
+                color: #b91c1c !important;
+                background: #fef2f2 !important;
+            }
+            .sav-tp-subtext {
+                font-size: 12px !important;
+                color: #6b7280 !important;
+                margin-top: 6px !important;
+            }
+            .sav-tp-open-link {
+                color: #2563eb !important;
+                font-weight: 500 !important;
+                text-decoration: underline !important;
+            }
+            /* CSS for Torrent Preview Popover end */
 
             avspan svg {
                 height: 14px;
